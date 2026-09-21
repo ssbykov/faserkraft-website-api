@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
-from app.models.models import LeadRequest
+from app.models import LeadRequest
 from app.schemas.schemas import LeadRequestCreate, LeadRequestOut
 from app.api.deps import require_editor
 from app.services.notifications import notify_new_lead

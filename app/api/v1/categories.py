@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
-from app.models.models import ProductCategory
+from app.models import ProductCategory
 from app.schemas.schemas import ProductCategoryCreate, ProductCategoryOut
 from app.api.deps import require_editor
 

@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
-from app.models.models import Redirect
+from app.models import Redirect
 from app.schemas.schemas import RedirectOut
 
 router = APIRouter(prefix="/redirects", tags=["redirects"])

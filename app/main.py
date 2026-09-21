@@ -5,6 +5,7 @@ app/main.py
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.admin import setup_admin
 from app.api.v1 import auth, categories, leads, products, redirects
 from app.core.config import settings
 
@@ -27,6 +28,8 @@ app.include_router(categories.router, prefix=settings.API_V1_PREFIX)
 app.include_router(products.router, prefix=settings.API_V1_PREFIX)
 app.include_router(leads.router, prefix=settings.API_V1_PREFIX)
 app.include_router(redirects.router, prefix=settings.API_V1_PREFIX)
+
+setup_admin(app)
 
 
 @app.get("/health", tags=["system"])

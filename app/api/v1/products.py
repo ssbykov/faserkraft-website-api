@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.db.session import get_db
-from app.models.models import Product, ProductCategory
+from app.models import Product, ProductCategory
 from app.schemas.schemas import ProductCreate, ProductListItem, ProductOut, ProductUpdate
 from app.api.deps import require_editor
 

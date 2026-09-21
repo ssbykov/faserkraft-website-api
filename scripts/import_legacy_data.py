@@ -9,7 +9,7 @@ from pathlib import Path
 from sqlalchemy import select
 
 from app.db.session import AsyncSessionLocal
-from app.models.models import Product, ProductCategory, ProductSpecification
+from app.models import Product, ProductCategory, ProductSpecification, ProductImage
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "legacy_data"
 
@@ -52,6 +52,10 @@ async def import_products(session, category_map: dict[str, int]) -> dict[int, in
                 )
                 session.add(obj)
                 await session.flush()
+            else:
+                obj.slug = row["slug"]
+                obj.name = row["title"]
+                obj.category_id = category_map.get(row.get("category_slug", ""), obj.category_id)
             legacy_to_new[legacy_id] = obj.id
     await session.commit()
     return legacy_to_new
@@ -65,37 +69,82 @@ async def import_specifications(session, legacy_to_new: dict[int, int]) -> None:
 
     with open(path, encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
-        sort_counters: dict[int, int] = {}
+        rows_by_product: dict[int, list[dict]] = {}
         for row in reader:
             legacy_id = int(row["product_id"])
             product_id = legacy_to_new.get(legacy_id)
             if product_id is None:
                 continue
-            sort_counters[product_id] = sort_counters.get(product_id, 0) + 1
+            rows_by_product.setdefault(product_id, []).append(row)
+
+    for product_id, rows in rows_by_product.items():
+        await session.execute(
+            ProductSpecification.__table__.delete().where(ProductSpecification.product_id == product_id)
+        )
+        for sort_order, row in enumerate(rows, start=1):
             spec = ProductSpecification(
                 product_id=product_id,
                 group_name=row["group_name"],
                 parameter_name=row["parameter_name"],
                 parameter_value=row.get("parameter_value", ""),
-                sort_order=sort_counters[product_id],
+                sort_order=sort_order,
             )
             session.add(spec)
     await session.commit()
 
 
+async def import_images(session, legacy_to_new: dict[int, int]) -> None:
+    path = DATA_DIR / "product_images.csv"
+    if not path.exists():
+        print(f"Пропуск: {path} не найден")
+        return
+
+    with open(path, encoding="utf-8-sig") as f:
+        reader = csv.DictReader(f)
+        rows_by_product: dict[int, list[dict]] = {}
+        skipped = 0
+        for row in reader:
+            legacy_id = int(row["product_id"])
+            product_id = legacy_to_new.get(legacy_id)
+            if product_id is None:
+                skipped += 1
+                continue
+            rows_by_product.setdefault(product_id, []).append(row)
+
+    for product_id, rows in rows_by_product.items():
+        await session.execute(
+            ProductImage.__table__.delete().where(ProductImage.product_id == product_id)
+        )
+        for row in rows:
+            image = ProductImage(
+                product_id=product_id,
+                image_url=row["image_url"],
+                sort_order=int(row.get("sort_order", 0) or 0),
+            )
+            session.add(image)
+    await session.commit()
+
+    print(f"   Изображений импортировано для товаров: {len(rows_by_product)}")
+    if skipped:
+        print(f"   Пропущено строк (товар не найден): {skipped}")
+
+
 async def main() -> None:
     async with AsyncSessionLocal() as session:
-        print("1/3 Заполнение категорий...")
+        print("1/4 Заполнение категорий...")
         category_map = await seed_categories(session)
 
-        print("2/3 Импорт продуктов...")
+        print("2/4 Импорт продуктов...")
         legacy_to_new = await import_products(session, category_map)
         print(f"   Импортировано продуктов: {len(legacy_to_new)}")
 
-        print("3/3 Импорт характеристик...")
+        print("3/4 Импорт характеристик...")
         await import_specifications(session, legacy_to_new)
 
-    print("Импорт завершён успешно.")
+        print("4/4 Импорт изображений...")
+        await import_images(session, legacy_to_new)
+
+        print("Импорт завершён успешно.")
 
 
 if __name__ == "__main__":
