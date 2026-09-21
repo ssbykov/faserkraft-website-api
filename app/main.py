@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.admin import setup_admin
-from app.api.v1 import auth, categories, leads, products, redirects
+from app.api.v1 import router as api_v1_router
 from app.core.config import settings
 
 app = FastAPI(
@@ -23,11 +23,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(auth.router, prefix=settings.API_V1_PREFIX)
-app.include_router(categories.router, prefix=settings.API_V1_PREFIX)
-app.include_router(products.router, prefix=settings.API_V1_PREFIX)
-app.include_router(leads.router, prefix=settings.API_V1_PREFIX)
-app.include_router(redirects.router, prefix=settings.API_V1_PREFIX)
+app.include_router(api_v1_router, prefix=settings.API_V1_PREFIX)
 
 setup_admin(app)
 
