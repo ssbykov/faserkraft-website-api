@@ -1,0 +1,5 @@
+source_path,target_path,http_status,reason
+/category/service.php,,410,"legacy SEO-spam backdoor, disabled 2026-09-21"
+/category/view.php,,410,"legacy SEO-spam backdoor pulling content from cheaptop.ru"
+/manul/,,410,"legacy scanner/executor/download tool, disabled 2026-09-21"
+/rezultaty-sout,REVIEW,0,"internal HR document, confirm with client before relaunch"

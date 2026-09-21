@@ -1,0 +1,6 @@
+id,wp_url_path,title,category,recommended_action
+1962,/,Главная,homepage,KEEP_AS_HOMEPAGE_ROOT
+2284,/contact,Контакты,contact,KEEP_URL
+2883,/ultrafiltracionnye-membrannye-moduli,Ультрафильтрационные мембранные модули,product_category,KEEP_URL
+3235,/pogruzhnoj-membrannyj-filtr,Погружные мембранные фильтры,product_category,KEEP_URL
+3874,/rezultaty-sout,Результаты СОУТ,internal_not_public,REVIEW_INTERNAL_DOC
