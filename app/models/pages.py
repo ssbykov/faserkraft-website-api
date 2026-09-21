@@ -48,6 +48,11 @@ class Page(Base):
     images: Mapped[list["PageImage"]] = relationship(
         back_populates="page", cascade="all, delete-orphan", order_by="PageImage.sort_order"
     )
+    documents: Mapped[list["PageDocument"]] = relationship(
+        back_populates="page",
+        cascade="all, delete-orphan",
+        order_by="PageDocument.sort_order",
+    )
 
 
 class PageImage(Base):
@@ -61,3 +66,25 @@ class PageImage(Base):
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
 
     page: Mapped["Page"] = relationship(back_populates="images")
+
+
+class PageDocument(Base):
+    __tablename__ = "page_documents"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    page_id: Mapped[int] = mapped_column(
+        ForeignKey("pages.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    document_type: Mapped[Optional[str]] = mapped_column(
+        String(100),
+        nullable=True,
+    )
+    title: Mapped[Optional[str]] = mapped_column(
+        String(500),
+        nullable=True,
+    )
+    file_url: Mapped[str] = mapped_column(String(1000), nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+
+    page: Mapped["Page"] = relationship(back_populates="documents")

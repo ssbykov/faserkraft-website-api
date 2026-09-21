@@ -9,10 +9,10 @@ from app.models.catalog import (
     ProductImage,
     ProductSpecification,
 )
-from app.models.pages import Page, PageImage, PageType
-from app.models.users import User
 from app.models.leads import LeadRequest
+from app.models.pages import Page, PageDocument, PageImage, PageType
 from app.models.redirects import Redirect
+from app.models.users import User
 
 __all__ = [
     "Product",
@@ -22,6 +22,7 @@ __all__ = [
     "ProductSpecification",
     "Page",
     "PageImage",
+    "PageDocument",
     "PageType",
     "User",
     "LeadRequest",
