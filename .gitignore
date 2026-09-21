@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.env
+.venv/
+venv/
+*.egg-info/
+.idea/
+.vscode/
+legacy_data/*.sql
+legacy_data/*.tar.gz
