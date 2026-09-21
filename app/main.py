@@ -2,8 +2,11 @@
 app/main.py
 Точка входа FastAPI-приложения бэкенда корпоративного сайта Faserkraft
 """
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.admin import setup_admin
 from app.api.v1 import router as api_v1_router
@@ -14,6 +17,11 @@ app = FastAPI(
     openapi_url=f"{settings.API_V1_PREFIX}/openapi.json",
     docs_url=f"{settings.API_V1_PREFIX}/docs",
 )
+
+MEDIA_DIR = Path(__file__).resolve().parent.parent / "media"
+MEDIA_DIR.mkdir(parents=True, exist_ok=True)
+
+app.mount("/media", StaticFiles(directory=MEDIA_DIR), name="media")
 
 app.add_middleware(
     CORSMiddleware,

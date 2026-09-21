@@ -2,6 +2,8 @@
 app/schemas/pages.py
 Pydantic v2 схемы контентных страниц.
 """
+from __future__ import annotations
+
 from datetime import datetime
 from typing import Optional
 
@@ -59,6 +61,7 @@ class PageUpdate(BaseModel):
 
 
 class PageListItem(BaseModel):
+    """Краткая страница для обычного плоского списка и children в PageOut."""
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -70,6 +73,26 @@ class PageListItem(BaseModel):
     page_type: PageTypeOut
 
 
+class PageTreeItem(BaseModel):
+    """
+    Рекурсивный пункт навигационного дерева.
+
+    Используется только GET /api/v1/pages/tree. Уровень вложенности не
+    ограничен схемой; фактическая глубина определяется тем, что загрузит
+    эндпоинт. Сейчас endpoint отдаёт корень и детей первого уровня.
+    """
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    slug: str
+    title: str
+    status: str
+    sort_order: int
+    parent_id: Optional[int] = None
+    page_type: PageTypeOut
+    children: list[PageTreeItem] = Field(default_factory=list)
+
+
 class PageOut(PageBase):
     model_config = ConfigDict(from_attributes=True)
 
@@ -79,4 +102,17 @@ class PageOut(PageBase):
     updated_at: datetime
     page_type: PageTypeOut
     images: list[PageImageOut] = Field(default_factory=list)
+    documents: list[PageDocumentOut] = Field(default_factory=list)
     children: list[PageListItem] = Field(default_factory=list)
+
+class PageDocumentBase(BaseModel):
+    document_type: Optional[str] = None
+    title: Optional[str] = None
+    file_url: str
+    sort_order: int = 0
+
+
+class PageDocumentOut(PageDocumentBase):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int

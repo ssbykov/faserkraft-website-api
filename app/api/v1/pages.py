@@ -12,7 +12,13 @@ from sqlalchemy.orm import selectinload
 from app.api.deps import require_editor
 from app.db.session import get_db
 from app.models import Page, PageType
-from app.schemas.pages import PageCreate, PageListItem, PageOut, PageUpdate
+from app.schemas.pages import (
+    PageCreate,
+    PageListItem,
+    PageOut,
+    PageTreeItem,
+    PageUpdate,
+)
 
 router = APIRouter(prefix="/pages", tags=["pages"])
 
@@ -57,14 +63,13 @@ async def list_pages(
     return result.scalars().all()
 
 
-@router.get("/tree", response_model=list[PageListItem])
+@router.get("/tree", response_model=list[PageTreeItem])
 async def get_pages_tree(db: AsyncSession = Depends(get_db)):
     """
     Дерево опубликованных страниц для навигации.
 
-    Возвращает опубликованные страницы верхнего уровня с опубликованными
-    дочерними страницами первого уровня. У детей поле children не включается,
-    поэтому ответ конечен и пригоден для меню.
+    Возвращает корневые опубликованные страницы с опубликованными дочерними
+    страницами первого уровня. В ответе каждого пункта есть children.
     """
     stmt = (
         select(Page)
@@ -78,19 +83,44 @@ async def get_pages_tree(db: AsyncSession = Depends(get_db)):
         )
         .order_by(Page.sort_order, Page.title)
     )
+
     result = await db.execute(stmt)
-    pages = result.scalars().unique().all()
+    root_pages = result.scalars().unique().all()
 
-    # SQLAlchemy relationship загружает всех детей. Оставляем опубликованных,
-    # чтобы в меню не попадали черновики.
-    for page_obj in pages:
-        page_obj.children[:] = [
-            child for child in page_obj.children if child.status == "published"
-        ]
-        page_obj.children.sort(key=lambda child: (child.sort_order, child.title))
+    def to_tree_item(page_obj: Page) -> PageTreeItem:
+        children = sorted(
+            (
+                child
+                for child in page_obj.children
+                if child.status == "published"
+            ),
+            key=lambda child: (child.sort_order, child.title),
+        )
 
-    return pages
+        return PageTreeItem(
+            id=page_obj.id,
+            slug=page_obj.slug,
+            title=page_obj.title,
+            status=page_obj.status,
+            sort_order=page_obj.sort_order,
+            parent_id=page_obj.parent_id,
+            page_type=page_obj.page_type,
+            children=[
+                PageTreeItem(
+                    id=child.id,
+                    slug=child.slug,
+                    title=child.title,
+                    status=child.status,
+                    sort_order=child.sort_order,
+                    parent_id=child.parent_id,
+                    page_type=child.page_type,
+                    children=[],
+                )
+                for child in children
+            ],
+        )
 
+    return [to_tree_item(page_obj) for page_obj in root_pages]
 
 @router.get("/{slug}", response_model=PageOut)
 async def get_page(slug: str, db: AsyncSession = Depends(get_db)):
@@ -101,6 +131,7 @@ async def get_page(slug: str, db: AsyncSession = Depends(get_db)):
             selectinload(Page.page_type),
             selectinload(Page.images),
             selectinload(Page.children).selectinload(Page.page_type),
+            selectinload(Page.documents),
         )
         .where(
             Page.slug == slug,
@@ -151,7 +182,10 @@ async def create_page(
     page_obj = Page(**payload.model_dump())
     db.add(page_obj)
     await db.commit()
-    await db.refresh(page_obj, attribute_names=["page_type", "images", "children"])
+    await db.refresh(
+        page_obj,
+        attribute_names=["page_type", "images", "documents", "children"],
+    )
     return page_obj
 
 
@@ -217,7 +251,10 @@ async def update_page(
         setattr(page_obj, field, value)
 
     await db.commit()
-    await db.refresh(page_obj, attribute_names=["page_type", "images", "children"])
+    await db.refresh(
+        page_obj,
+        attribute_names=["page_type", "images", "documents", "children"],
+    )
     return page_obj
 
 

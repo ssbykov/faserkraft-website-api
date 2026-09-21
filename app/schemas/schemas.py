@@ -19,8 +19,11 @@ from app.schemas.pages import (
     PageImageOut,
     PageListItem,
     PageOut,
+    PageTreeItem,
     PageTypeOut,
     PageUpdate,
+    PageDocumentBase,
+    PageDocumentOut,
 )
 from app.schemas.products import (
     ProductBase,
@@ -66,8 +69,11 @@ __all__ = [
     "PageCreate",
     "PageUpdate",
     "PageListItem",
+    "PageTreeItem",
     "PageOut",
     "PageTypeOut",
     "PageImageBase",
     "PageImageOut",
+    "PageDocumentBase",
+    "PageDocumentOut",
 ]
