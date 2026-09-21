@@ -1,6 +1,6 @@
 """
-app/models/models.py
-SQLAlchemy 2.x декларативные модели каталога продукции сайта Faserkraft
+app/models/catalog.py
+Модели каталога продукции: категории, товары, характеристики, изображения, документы
 """
 from datetime import datetime
 from typing import Optional
@@ -40,7 +40,9 @@ class Product(Base):
     seo_title: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     seo_description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
     category: Mapped[Optional["ProductCategory"]] = relationship(back_populates="products")
     specifications: Mapped[list["ProductSpecification"]] = relationship(
@@ -89,39 +91,3 @@ class ProductDocument(Base):
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
 
     product: Mapped[Optional["Product"]] = relationship(back_populates="documents")
-
-
-class Redirect(Base):
-    __tablename__ = "redirects"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    source_path: Mapped[str] = mapped_column(String(500), unique=True, nullable=False, index=True)
-    target_path: Mapped[str] = mapped_column(String(500), nullable=False)
-    http_status: Mapped[int] = mapped_column(Integer, default=301)
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-
-
-class User(Base):
-    __tablename__ = "users"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
-    hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
-    full_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    role: Mapped[str] = mapped_column(String(50), default="editor")
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-
-
-class LeadRequest(Base):
-    __tablename__ = "lead_requests"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String(255), nullable=False)
-    phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    source_url: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
-    product_id: Mapped[Optional[int]] = mapped_column(ForeignKey("products.id"), nullable=True)
-    status: Mapped[str] = mapped_column(String(50), default="new")
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
