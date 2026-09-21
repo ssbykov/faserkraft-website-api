@@ -8,3 +8,7 @@ venv/
 .vscode/
 legacy_data/*.sql
 legacy_data/*.tar.gz
+# Local migration inputs and runtime assets
+legacy_data/
+media/
+scripts/migrate_page_documents.py
