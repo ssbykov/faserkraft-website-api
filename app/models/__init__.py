@@ -13,6 +13,7 @@ from app.models.leads import LeadRequest
 from app.models.pages import Page, PageDocument, PageImage, PageType
 from app.models.redirects import Redirect
 from app.models.users import User
+from app.models.menu import Menu, MenuItem
 
 __all__ = [
     "Product",
@@ -27,4 +28,6 @@ __all__ = [
     "User",
     "LeadRequest",
     "Redirect",
+    "Menu",
+    "MenuItem",
 ]
