@@ -1,7 +1,15 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import String, Boolean, DateTime, func, CheckConstraint, ForeignKey, Integer
+from sqlalchemy import (
+    String,
+    Boolean,
+    DateTime,
+    func,
+    CheckConstraint,
+    ForeignKey,
+    Integer,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
@@ -45,6 +53,9 @@ class Menu(Base):
         cascade="all, delete-orphan",
         order_by="MenuItem.sort_order",
     )
+
+    def __repr__(self) -> str:
+        return self.name
 
 
 class MenuItem(Base):
@@ -145,3 +156,6 @@ class MenuItem(Base):
     product: Mapped[Optional[Product]] = relationship(
         foreign_keys=[product_id],
     )
+
+    def __repr__(self) -> str:
+        return self.label
