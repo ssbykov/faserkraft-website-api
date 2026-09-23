@@ -43,6 +43,8 @@ from app.schemas.products import (
     ProductUpdate,
 )
 from app.schemas.redirects import RedirectOut
+from app.schemas.menus import MenuItemTreeOut, MenuTreeOut
+from app.schemas.homepage import HomepageCardOut, HomepageSectionOut, HomepageOut
 
 __all__ = [
     "ProductCategoryBase",
@@ -76,4 +78,9 @@ __all__ = [
     "PageImageOut",
     "PageDocumentBase",
     "PageDocumentOut",
+    "MenuItemTreeOut",
+    "MenuTreeOut",
+    "HomepageCardOut",
+    "HomepageSectionOut",
+    "HomepageOut",
 ]

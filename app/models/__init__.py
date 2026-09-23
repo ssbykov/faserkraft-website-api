@@ -14,6 +14,7 @@ from app.models.pages import Page, PageDocument, PageImage, PageType
 from app.models.redirects import Redirect
 from app.models.users import User
 from app.models.menus import Menu, MenuItem
+from app.models.homepage import HomepageCard, HomepageSection
 
 __all__ = [
     "Product",
@@ -30,4 +31,6 @@ __all__ = [
     "Redirect",
     "Menu",
     "MenuItem",
+    "HomepageCard",
+    "HomepageSection",
 ]
