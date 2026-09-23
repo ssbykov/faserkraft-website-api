@@ -1,6 +1,10 @@
+from typing import Any
+
 from sqladmin import ModelView
+from starlette.requests import Request
 
 from app.models import HomepageCard, HomepageSection
+from app.services.revalidation import revalidate_homepage
 
 
 class HomepageSectionAdmin(ModelView, model=HomepageSection):
@@ -53,6 +57,22 @@ class HomepageSectionAdmin(ModelView, model=HomepageSection):
 
     can_export = True
     page_size = 50
+
+    async def after_model_change(
+        self,
+        data: dict[str, Any],
+        model: HomepageSection,
+        is_created: bool,
+        request: Request,
+    ) -> None:
+        await revalidate_homepage()
+
+    async def after_model_delete(
+        self,
+        model: HomepageSection,
+        request: Request,
+    ) -> None:
+        await revalidate_homepage()
 
 
 class HomepageCardAdmin(ModelView, model=HomepageCard):
@@ -119,6 +139,22 @@ class HomepageCardAdmin(ModelView, model=HomepageCard):
 
     can_export = True
     page_size = 100
+
+    async def after_model_change(
+        self,
+        data: dict[str, Any],
+        model: HomepageSection,
+        is_created: bool,
+        request: Request,
+    ) -> None:
+        await revalidate_homepage()
+
+    async def after_model_delete(
+        self,
+        model: HomepageSection,
+        request: Request,
+    ) -> None:
+        await revalidate_homepage()
 
 
 HOMEPAGE_VIEWS = [

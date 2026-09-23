@@ -25,6 +25,9 @@ class Settings(BaseSettings):
 
     CORS_ORIGINS: list[str] = ["http://localhost:3000"]
 
+    FRONTEND_REVALIDATE_URL: str | None = None
+    FRONTEND_REVALIDATE_SECRET: str | None = None
+
     S3_ENDPOINT_URL: str = "https://s3.example.com"
     S3_BUCKET: str = "faserkraft-media"
     S3_ACCESS_KEY: str = ""

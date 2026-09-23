@@ -12,3 +12,5 @@ legacy_data/*.tar.gz
 legacy_data/
 media/
 scripts/migrate_page_documents.py
+
+/backups/
