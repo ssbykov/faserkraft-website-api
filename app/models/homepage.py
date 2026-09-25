@@ -89,6 +89,8 @@ class HomepageSection(Base):
         order_by="HomepageCard.sort_order",
     )
 
+    def __repr__(self) -> str:
+        return self.code
 
 class HomepageCard(Base):
     __tablename__ = "homepage_cards"
@@ -167,3 +169,12 @@ class HomepageCard(Base):
     product: Mapped[Optional[Product]] = relationship(
         foreign_keys=[product_id],
     )
+
+    def __repr__(self) -> str:
+        title = self.title_override or self.label
+        return (
+            f"<HomepageCard id={self.id} "
+            f"section_id={self.section_id} "
+            f"title={title!r} "
+            f"visible={self.is_visible}>"
+        )
