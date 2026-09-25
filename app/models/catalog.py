@@ -24,6 +24,9 @@ class ProductCategory(Base):
 
     products: Mapped[list["Product"]] = relationship(back_populates="category")
 
+    def __repr__(self) -> str:
+        return self.name
+
 
 class Product(Base):
     __tablename__ = "products"
@@ -55,6 +58,8 @@ class Product(Base):
         back_populates="product", cascade="all, delete-orphan", order_by="ProductDocument.sort_order"
     )
 
+    def __repr__(self) -> str:
+        return self.name
 
 class ProductSpecification(Base):
     __tablename__ = "product_specifications"
@@ -67,6 +72,9 @@ class ProductSpecification(Base):
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
 
     product: Mapped["Product"] = relationship(back_populates="specifications")
+
+    def __repr__(self) -> str:
+        return self.parameter_name
 
 
 class ProductImage(Base):
@@ -91,3 +99,6 @@ class ProductDocument(Base):
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
 
     product: Mapped[Optional["Product"]] = relationship(back_populates="documents")
+
+    def __repr__(self) -> str:
+        return self.document_type or "Документа нет"
