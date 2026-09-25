@@ -1,6 +1,7 @@
 from typing import Any
 
 from sqladmin import ModelView
+from sqladmin.filters import BooleanFilter, ForeignKeyFilter
 from starlette.requests import Request
 
 from app.models import HomepageCard, HomepageSection
@@ -37,7 +38,7 @@ class HomepageSectionAdmin(ModelView, model=HomepageSection):
     ]
 
     column_filters = [
-        HomepageSection.is_visible,
+        BooleanFilter(HomepageSection.is_visible),
     ]
 
     form_columns = [
@@ -104,8 +105,12 @@ class HomepageCardAdmin(ModelView, model=HomepageCard):
     ]
 
     column_filters = [
-        HomepageCard.section_id,
-        HomepageCard.is_visible,
+        ForeignKeyFilter(
+            HomepageCard.section_id,
+            HomepageSection.title,
+            title="Секция",
+        ),
+        BooleanFilter(HomepageCard.is_visible),
     ]
 
     form_columns = [

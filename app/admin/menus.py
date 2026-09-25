@@ -4,6 +4,7 @@ app/admin/menus.py
 """
 
 from sqladmin import ModelView
+from sqladmin.filters import BooleanFilter, ForeignKeyFilter
 
 from app.models import Menu, MenuItem
 
@@ -32,7 +33,7 @@ class MenuAdmin(ModelView, model=Menu):
         Menu.updated_at,
     ]
     column_filters = [
-        Menu.is_active,
+        BooleanFilter(Menu.is_active),
     ]
 
     form_columns = [
@@ -72,9 +73,9 @@ class MenuItemAdmin(ModelView, model=MenuItem):
         MenuItem.target_blank,
     ]
     column_filters = [
-        MenuItem.menu_id,
-        MenuItem.is_visible,
-        MenuItem.target_blank,
+        ForeignKeyFilter(MenuItem.menu_id, Menu.name, title="Меню"),
+        BooleanFilter(MenuItem.is_visible),
+        BooleanFilter(MenuItem.target_blank),
     ]
 
     form_columns = [

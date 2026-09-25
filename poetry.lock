@@ -1416,25 +1416,27 @@ files = [
 
 [[package]]
 name = "sqladmin"
-version = "0.20.1"
+version = "0.32.0"
 description = "SQLAlchemy admin for FastAPI and Starlette"
 optional = false
-python-versions = ">=3.8"
+python-versions = ">=3.10"
 groups = ["main"]
 files = [
-    {file = "sqladmin-0.20.1-py3-none-any.whl", hash = "sha256:82310bb5b4cc2563494e42a03ef0b269030d78f6df4f6a331837f0f124d10dae"},
-    {file = "sqladmin-0.20.1.tar.gz", hash = "sha256:b6cc6df648a8a05f7baa57cd5fc236cf0729d0bb27b0a33ced150e956fa68437"},
+    {file = "sqladmin-0.32.0-py3-none-any.whl", hash = "sha256:4f5cff4ab8e5349a3dcad17f3a4d46a7867b54b92ac45e5626fdb96e465c127f"},
+    {file = "sqladmin-0.32.0.tar.gz", hash = "sha256:4433dd89f6442856efa8f1ed1acf4b1b8ba67abe15ca54f9364c043ed301c823"},
 ]
 
 [package.dependencies]
 jinja2 = "*"
 python-multipart = "*"
-sqlalchemy = ">=1.4"
-starlette = "*"
-wtforms = ">=3.1,<3.2"
+sqlalchemy = ">=2.0"
+starlette = ">=0.50,<2.0.0"
+wtforms = ">=3.1,<3.3"
 
 [package.extras]
-full = ["itsdangerous"]
+auth = ["itsdangerous"]
+full = ["babel", "itsdangerous"]
+i18n = ["babel"]
 
 [[package]]
 name = "sqlalchemy"
@@ -1911,4 +1913,4 @@ email = ["email-validator"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.12"
-content-hash = "dd2b4b8226483efffb982c55150051a283289d6d20cb9d96ad9fae03b7a70732"
+content-hash = "fff479e5001e0c58f1743d13b11cc0021bcb6416c3945b53a7fb6e0066d30b26"

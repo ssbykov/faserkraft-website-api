@@ -2,7 +2,9 @@
 app/admin/pages.py
 Регистрация моделей контентных страниц в SQLAdmin
 """
+
 from sqladmin import ModelView
+from sqladmin.filters import StaticValuesFilter, ForeignKeyFilter
 
 from app.models import Page, PageImage, PageType
 
@@ -20,10 +22,24 @@ class PageAdmin(ModelView, model=Page):
     name = "Страница"
     name_plural = "Страницы"
     icon = "fa-solid fa-file-lines"
-    column_list = [Page.id, Page.slug, Page.title, Page.page_type, Page.parent, Page.status, Page.updated_at]
+    column_list = [
+        Page.id,
+        Page.slug,
+        Page.title,
+        Page.page_type,
+        Page.parent,
+        Page.status,
+        Page.updated_at,
+    ]
     column_searchable_list = [Page.title, Page.slug]
     column_sortable_list = [Page.id, Page.sort_order, Page.updated_at]
-    column_filters = [Page.status, Page.page_type_id]
+    column_filters = [
+        StaticValuesFilter(
+            Page.status,
+            values=[("published", "Опубликована"), ("draft", "Черновик")],
+        ),
+        ForeignKeyFilter(Page.page_type_id, PageType.name, title="Тип страницы"),
+    ]
     form_columns = [
         Page.page_type,
         Page.parent,
@@ -48,8 +64,20 @@ class PageImageAdmin(ModelView, model=PageImage):
     name = "Изображение страницы"
     name_plural = "Изображения страниц"
     icon = "fa-solid fa-image"
-    column_list = [PageImage.id, PageImage.page, PageImage.image_url, PageImage.is_cover, PageImage.sort_order]
-    form_columns = [PageImage.page, PageImage.image_url, PageImage.alt_text, PageImage.is_cover, PageImage.sort_order]
+    column_list = [
+        PageImage.id,
+        PageImage.page,
+        PageImage.image_url,
+        PageImage.is_cover,
+        PageImage.sort_order,
+    ]
+    form_columns = [
+        PageImage.page,
+        PageImage.image_url,
+        PageImage.alt_text,
+        PageImage.is_cover,
+        PageImage.sort_order,
+    ]
 
 
 PAGES_VIEWS = [

@@ -20,7 +20,7 @@ dependencies = [
     "python-multipart (>=0.0.20,<0.0.21)",
     "httpx (>=0.28.0,<0.29.0)",
     "email-validator (>=2.2.0,<3.0.0)",
-    "sqladmin (>=0.20.1,<0.21.0)",
+    "sqladmin (==0.32.0)",
     "itsdangerous (>=2.2.0,<3.0.0)",
     "passlib[argon2] (==1.7.4)",
     "argon2-cffi (>=25.1.0,<26.0.0)",
