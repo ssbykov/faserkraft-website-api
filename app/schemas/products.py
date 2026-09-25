@@ -109,3 +109,12 @@ class ProductOut(ProductBase):
     specifications: list[ProductSpecificationOut] = Field(default_factory=list)
     images: list[ProductImageOut] = Field(default_factory=list)
     documents: list[ProductDocumentOut] = Field(default_factory=list)
+
+class FilterOption(BaseModel):
+    label: str
+    value: str
+
+
+class ProductFiltersResponse(BaseModel):
+    materials: list[FilterOption]
+    areas: list[FilterOption]
