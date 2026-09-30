@@ -2,6 +2,7 @@
 app/api/v1/pages.py
 Публичные и административные эндпоинты контентных страниц.
 """
+
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -11,7 +12,7 @@ from sqlalchemy.orm import selectinload
 
 from app.api.deps import require_editor
 from app.db.session import get_db
-from app.models import Page, PageType
+from app.models import Page, PageType, MenuItem, Menu
 from app.schemas.pages import (
     PageCreate,
     PageListItem,
@@ -89,11 +90,7 @@ async def get_pages_tree(db: AsyncSession = Depends(get_db)):
 
     def to_tree_item(page_obj: Page) -> PageTreeItem:
         children = sorted(
-            (
-                child
-                for child in page_obj.children
-                if child.status == "published"
-            ),
+            (child for child in page_obj.children if child.status == "published"),
             key=lambda child: (child.sort_order, child.title),
         )
 
@@ -122,6 +119,7 @@ async def get_pages_tree(db: AsyncSession = Depends(get_db)):
 
     return [to_tree_item(page_obj) for page_obj in root_pages]
 
+
 @router.get("/{slug}", response_model=PageOut)
 async def get_page(slug: str, db: AsyncSession = Depends(get_db)):
     """Детальная опубликованная страница по slug."""
@@ -129,6 +127,7 @@ async def get_page(slug: str, db: AsyncSession = Depends(get_db)):
         select(Page)
         .options(
             selectinload(Page.page_type),
+            selectinload(Page.parent),
             selectinload(Page.images),
             selectinload(Page.children).selectinload(Page.page_type),
             selectinload(Page.documents),
@@ -138,14 +137,37 @@ async def get_page(slug: str, db: AsyncSession = Depends(get_db)):
             Page.status == "published",
         )
     )
+
     result = await db.execute(stmt)
     page_obj = result.scalar_one_or_none()
-    if not page_obj:
+
+    if page_obj is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Страница не найдена",
         )
-    return page_obj
+
+    menu_result = await db.execute(
+        select(MenuItem)
+        .join(Menu, Menu.id == MenuItem.menu_id)
+        .options(selectinload(MenuItem.parent))
+        .where(
+            MenuItem.page_id == page_obj.id,
+            MenuItem.is_visible.is_(True),
+            Menu.is_active.is_(True),
+            MenuItem.parent_id.is_not(None),
+        )
+        .order_by(Menu.code, MenuItem.sort_order, MenuItem.id)
+    )
+
+    menu_parent_labels = [
+        item.parent.label
+        for item in menu_result.scalars().all()
+        if item.parent is not None and item.parent.is_visible
+    ]
+
+    page_out = PageOut.model_validate(page_obj)
+    return page_out.model_copy(update={"menu_parent_labels": menu_parent_labels})
 
 
 @router.post("", response_model=PageOut, status_code=status.HTTP_201_CREATED)
@@ -172,7 +194,9 @@ async def create_page(
         )
 
     if payload.parent_id is not None:
-        parent_result = await db.execute(select(Page).where(Page.id == payload.parent_id))
+        parent_result = await db.execute(
+            select(Page).where(Page.id == payload.parent_id)
+        )
         if not parent_result.scalar_one_or_none():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -184,7 +208,7 @@ async def create_page(
     await db.commit()
     await db.refresh(
         page_obj,
-        attribute_names=["page_type", "images", "documents", "children"],
+        attribute_names=["page_type", "parent", "images", "documents", "children"],
     )
     return page_obj
 
@@ -253,7 +277,7 @@ async def update_page(
     await db.commit()
     await db.refresh(
         page_obj,
-        attribute_names=["page_type", "images", "documents", "children"],
+        attribute_names=["page_type", "parent", "images", "documents", "children"],
     )
     return page_obj
 
