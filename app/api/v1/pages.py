@@ -10,15 +10,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.api.deps import require_editor
 from app.db.session import get_db
 from app.models import Page, PageType, MenuItem, Menu
 from app.schemas.pages import (
-    PageCreate,
     PageListItem,
     PageOut,
     PageTreeItem,
-    PageUpdate,
 )
 
 router = APIRouter(prefix="/pages", tags=["pages"])
@@ -170,141 +167,7 @@ async def get_page(slug: str, db: AsyncSession = Depends(get_db)):
     return page_out.model_copy(update={"menu_parent_labels": menu_parent_labels})
 
 
-@router.post("", response_model=PageOut, status_code=status.HTTP_201_CREATED)
-async def create_page(
-    payload: PageCreate,
-    db: AsyncSession = Depends(get_db),
-    _user=Depends(require_editor),
-):
-    """Создаёт новую контентную страницу. Доступно редактору."""
-    existing = await db.execute(select(Page).where(Page.slug == payload.slug))
-    if existing.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Страница с таким slug уже существует",
-        )
-
-    page_type_result = await db.execute(
-        select(PageType).where(PageType.id == payload.page_type_id)
-    )
-    if not page_type_result.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Указанный page_type_id не существует",
-        )
-
-    if payload.parent_id is not None:
-        parent_result = await db.execute(
-            select(Page).where(Page.id == payload.parent_id)
-        )
-        if not parent_result.scalar_one_or_none():
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Указанный parent_id не существует",
-            )
-
-    page_obj = Page(**payload.model_dump())
-    db.add(page_obj)
-    await db.commit()
-    await db.refresh(
-        page_obj,
-        attribute_names=["page_type", "parent", "images", "documents", "children"],
-    )
-    return page_obj
 
 
-@router.patch("/{page_id}", response_model=PageOut)
-async def update_page(
-    page_id: int,
-    payload: PageUpdate,
-    db: AsyncSession = Depends(get_db),
-    _user=Depends(require_editor),
-):
-    """Частично обновляет страницу. Доступно редактору."""
-    result = await db.execute(select(Page).where(Page.id == page_id))
-    page_obj = result.scalar_one_or_none()
-    if not page_obj:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Страница не найдена",
-        )
-
-    update_data = payload.model_dump(exclude_unset=True)
-
-    if "slug" in update_data:
-        existing = await db.execute(
-            select(Page).where(
-                Page.slug == update_data["slug"],
-                Page.id != page_id,
-            )
-        )
-        if existing.scalar_one_or_none():
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Страница с таким slug уже существует",
-            )
-
-    if "page_type_id" in update_data:
-        page_type_result = await db.execute(
-            select(PageType).where(PageType.id == update_data["page_type_id"])
-        )
-        if not page_type_result.scalar_one_or_none():
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Указанный page_type_id не существует",
-            )
-
-    if "parent_id" in update_data:
-        parent_id = update_data["parent_id"]
-
-        if parent_id == page_id:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Страница не может быть родителем самой себя",
-            )
-
-        if parent_id is not None:
-            parent_result = await db.execute(select(Page).where(Page.id == parent_id))
-            if not parent_result.scalar_one_or_none():
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Указанный parent_id не существует",
-                )
-
-    for field, value in update_data.items():
-        setattr(page_obj, field, value)
-
-    await db.commit()
-    await db.refresh(
-        page_obj,
-        attribute_names=["page_type", "parent", "images", "documents", "children"],
-    )
-    return page_obj
 
 
-@router.delete("/{page_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_page(
-    page_id: int,
-    db: AsyncSession = Depends(get_db),
-    _user=Depends(require_editor),
-):
-    """Удаляет страницу без дочерних страниц. Доступно редактору."""
-    result = await db.execute(select(Page).where(Page.id == page_id))
-    page_obj = result.scalar_one_or_none()
-    if not page_obj:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Страница не найдена",
-        )
-
-    children_result = await db.execute(
-        select(Page.id).where(Page.parent_id == page_id).limit(1)
-    )
-    if children_result.scalar_one_or_none() is not None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Нельзя удалить страницу, у которой есть дочерние страницы",
-        )
-
-    await db.delete(page_obj)
-    await db.commit()

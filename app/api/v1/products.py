@@ -10,15 +10,12 @@ from sqlalchemy import select, distinct
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.api.deps import require_editor
 from app.db.session import get_db
 from app.models import Product, ProductCategory, ProductSpecification
 from app.schemas.products import ProductFiltersResponse, FilterOption
 from app.schemas.schemas import (
-    ProductCreate,
     ProductListItem,
     ProductOut,
-    ProductUpdate,
 )
 
 router = APIRouter(prefix="/products", tags=["products"])
@@ -218,7 +215,7 @@ async def get_product(slug: str, db: AsyncSession = Depends(get_db)):
             selectinload(Product.images),
             selectinload(Product.documents),
         )
-        .where(Product.slug == slug)
+        .where(Product.slug == slug, Product.status == "published")
     )
     result = await db.execute(stmt)
     product = result.scalar_one_or_none()
@@ -229,43 +226,5 @@ async def get_product(slug: str, db: AsyncSession = Depends(get_db)):
     return product
 
 
-@router.post("", response_model=ProductOut, status_code=status.HTTP_201_CREATED)
-async def create_product(
-    payload: ProductCreate,
-    db: AsyncSession = Depends(get_db),
-    _user=Depends(require_editor),
-):
-    existing = await db.execute(select(Product).where(Product.slug == payload.slug))
-    if existing.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Продукт с таким slug уже существует",
-        )
-
-    product = Product(**payload.model_dump())
-    db.add(product)
-    await db.commit()
-    await db.refresh(product)
-    return product
 
 
-@router.patch("/{product_id}", response_model=ProductOut)
-async def update_product(
-    product_id: int,
-    payload: ProductUpdate,
-    db: AsyncSession = Depends(get_db),
-    _user=Depends(require_editor),
-):
-    result = await db.execute(select(Product).where(Product.id == product_id))
-    product = result.scalar_one_or_none()
-    if not product:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Продукт не найден"
-        )
-
-    for field, value in payload.model_dump(exclude_unset=True).items():
-        setattr(product, field, value)
-
-    await db.commit()
-    await db.refresh(product)
-    return product
