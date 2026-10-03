@@ -1,0 +1,15 @@
+.git
+.env
+.env.*
+!.env.example
+.venv
+__pycache__
+.pytest_cache
+.idea
+.vscode
+backups
+media
+legacy_data
+*.dump
+*.sql
+*.tar.gz
