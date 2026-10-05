@@ -1,7 +1,4 @@
-"""
-app/admin/__init__.py
-Сборка административной панели SQLAdmin: подключение авторизации и всех view
-"""
+from pathlib import Path
 
 from sqladmin import Admin
 
@@ -16,6 +13,8 @@ from app.admin.redirects import REDIRECTS_VIEWS
 from app.admin.users import USERS_VIEWS
 from app.db.session import engine
 
+TEMPLATES_DIR = Path(__file__).resolve().parents[1] / "templates"
+
 
 def setup_admin(app) -> Admin:
     admin = Admin(
@@ -23,6 +22,7 @@ def setup_admin(app) -> Admin:
         engine,
         authentication_backend=authentication_backend,
         title="Faserkraft — Админка сайта",
+        templates_dir=str(TEMPLATES_DIR),
     )
 
     for view in [

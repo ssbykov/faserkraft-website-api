@@ -1,12 +1,13 @@
 import asyncio
 import os
 import re
+import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
 from app.core.config import settings
 
-BACKUP_DIR = Path(os.getenv("BACKUP_DIR", "/app/backups"))
+BACKUP_DIR = Path(os.getenv("BACKUP_DIR") or Path(__file__).resolve().parents[2] / "backups")
 BACKUP_KEEP = int(os.getenv("BACKUP_KEEP", "14"))
 NAME_RE = re.compile(r"^[A-Za-z0-9_.-]+\.dump$")
 _lock = asyncio.Lock()
@@ -42,6 +43,25 @@ def _prune() -> None:
         (BACKUP_DIR / old["name"]).unlink(missing_ok=True)
 
 
+def _run_pg_dump(part: Path) -> None:
+    result = subprocess.run(
+        [
+            "pg_dump", "--format=custom", "--no-owner",
+            "-h", str(settings.POSTGRES_HOST),
+            "-p", str(settings.POSTGRES_PORT),
+            "-U", settings.POSTGRES_USER,
+            "-d", settings.POSTGRES_DB,
+            "-f", str(part),
+        ],
+        env={**os.environ, "PGPASSWORD": settings.POSTGRES_PASSWORD},
+        capture_output=True,
+        timeout=900,
+    )
+    if result.returncode != 0:
+        msg = result.stderr.decode(errors="replace").strip()[-300:]
+        raise RuntimeError(f"pg_dump завершился с ошибкой: {msg}")
+
+
 async def create_backup() -> Path:
     if _lock.locked():
         raise RuntimeError("Бэкап уже создаётся, подождите.")
@@ -51,31 +71,24 @@ async def create_backup() -> Path:
         final = BACKUP_DIR / f"{settings.POSTGRES_DB}_{stamp}.dump"
         part = final.with_name(final.name + ".part")
 
-        proc = await asyncio.create_subprocess_exec(
-            "pg_dump", "--format=custom", "--no-owner",
-            "-h", settings.POSTGRES_HOST,
-            "-p", str(settings.POSTGRES_PORT),
-            "-U", settings.POSTGRES_USER,
-            "-d", settings.POSTGRES_DB,
-            "-f", str(part),
-            env={**os.environ, "PGPASSWORD": settings.POSTGRES_PASSWORD},
-            stdout=asyncio.subprocess.DEVNULL,
-            stderr=asyncio.subprocess.PIPE,
-        )
         try:
-            _, stderr = await asyncio.wait_for(proc.communicate(), timeout=900)
-        except asyncio.TimeoutError:
-            proc.kill()
-            await proc.wait()
+            await asyncio.to_thread(_run_pg_dump, part)
+        except FileNotFoundError:
+            part.unlink(missing_ok=True)
+            raise RuntimeError(
+                "pg_dump не найден: установите PostgreSQL client и добавьте его в PATH."
+            )
+        except subprocess.TimeoutExpired:
             part.unlink(missing_ok=True)
             raise RuntimeError("pg_dump не уложился в 15 минут.")
-
-        if proc.returncode != 0:
+        except Exception:
             part.unlink(missing_ok=True)
-            msg = stderr.decode(errors="replace").strip()[-300:]
-            raise RuntimeError(f"pg_dump завершился с ошибкой: {msg}")
+            raise
 
         part.replace(final)
-        final.chmod(0o644)
+        try:
+            final.chmod(0o644)
+        except OSError:
+            pass
         _prune()
         return final
