@@ -13,3 +13,4 @@ legacy_data
 *.dump
 *.sql
 *.tar.gz
+backups/

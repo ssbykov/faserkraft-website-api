@@ -1,0 +1,37 @@
+{% extends "sqladmin/layout.html" %}
+{% block content %}
+<div class="col-12">
+  <div class="card">
+    <div class="card-header">
+      <h3 class="card-title">Резервные копии базы данных</h3>
+    </div>
+    <div class="card-body">
+      {% if flash %}
+        <div class="alert {{ 'alert-success' if flash.ok else 'alert-danger' }}">{{ flash.text }}</div>
+      {% endif %}
+
+      <form method="post" onsubmit="this.querySelector('button').disabled = true;">
+        <button type="submit" class="btn btn-primary">Создать бэкап</button>
+      </form>
+
+      <table class="table table-vcenter mt-4">
+        <thead>
+          <tr><th>Файл</th><th>Создан</th><th>Размер, МБ</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for b in backups %}
+          <tr>
+            <td>{{ b.name }}</td>
+            <td>{{ b.created }}</td>
+            <td>{{ b.size_mb }}</td>
+            <td><a href="{{ download_url }}?name={{ b.name | urlencode }}">Скачать</a></td>
+          </tr>
+          {% else %}
+          <tr><td colspan="4">Бэкапов пока нет.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

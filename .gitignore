@@ -11,6 +11,7 @@ legacy_data/*.tar.gz
 # Local migration inputs and runtime assets
 legacy_data/
 media/
+backups/
 scripts/migrate_page_documents.py
 *.dump
 

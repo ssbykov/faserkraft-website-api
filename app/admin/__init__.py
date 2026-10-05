@@ -6,6 +6,7 @@ app/admin/__init__.py
 from sqladmin import Admin
 
 from app.admin.auth import authentication_backend
+from app.admin.backup import BackupAdmin
 from app.admin.catalog import CATALOG_VIEWS
 from app.admin.leads import LEADS_VIEWS
 from app.admin.menus import MENUS_VIEWS
@@ -34,5 +35,7 @@ def setup_admin(app) -> Admin:
         *HOMEPAGE_VIEWS,
     ]:
         admin.add_view(view)
+
+    admin.add_view(BackupAdmin)
 
     return admin
