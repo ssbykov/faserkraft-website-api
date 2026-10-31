@@ -13,7 +13,8 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
-from app.models import Page, Product
+from app.models.pages import Page
+from app.models.catalog import Product
 
 
 class Menu(Base):
