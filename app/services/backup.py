@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from app.core.config import settings
+from app.services.yandex_disk import YaDisk
 
 BACKUP_DIR = Path(os.getenv("BACKUP_DIR") or Path(__file__).resolve().parents[2] / "backups")
 BACKUP_KEEP = int(os.getenv("BACKUP_KEEP", "14"))
@@ -91,4 +92,6 @@ async def create_backup() -> Path:
         except OSError:
             pass
         _prune()
+
+        await YaDisk().upload_backup(final)
         return final

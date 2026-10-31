@@ -2,6 +2,7 @@
 app/models/__init__.py
 Точка сборки всех моделей — импортируется Alembic (target_metadata) и остальным кодом.
 """
+
 from app.models.catalog import (
     Product,
     ProductCategory,
@@ -9,12 +10,13 @@ from app.models.catalog import (
     ProductImage,
     ProductSpecification,
 )
+from app.models.homepage import HomepageCard, HomepageSection
 from app.models.leads import LeadRequest
+from app.models.menus import Menu, MenuItem
 from app.models.pages import Page, PageDocument, PageImage, PageType
 from app.models.redirects import Redirect
 from app.models.users import User
-from app.models.menus import Menu, MenuItem
-from app.models.homepage import HomepageCard, HomepageSection
+from app.models.yandex_token import YandexToken
 
 __all__ = [
     "Product",
@@ -33,4 +35,5 @@ __all__ = [
     "MenuItem",
     "HomepageCard",
     "HomepageSection",
+    "YandexToken",
 ]

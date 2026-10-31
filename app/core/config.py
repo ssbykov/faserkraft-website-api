@@ -25,6 +25,12 @@ class Settings(BaseSettings):
     POSTGRES_PASSWORD: str = ""
     POSTGRES_DB: str = "faserkraft"
 
+    YANDEX_DISK_CLIENT_ID: str = ""
+    YANDEX_DISK_CLIENT_SECRET: str = ""
+    YANDEX_DISK_REFRESH_TOKEN: str = ""
+    YANDEX_DISK_BACKUP_FOLDER: str = "faserkraft-db-backups"
+    YANDEX_DISK_TIMEOUT_SECONDS: int = 900
+
     SECRET_KEY: str = ""
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 12
