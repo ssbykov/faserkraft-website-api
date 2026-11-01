@@ -76,6 +76,7 @@ class BackupAdmin(BaseView):
                 "flash": request.session.pop("backup_flash", None),
                 "download_url": f"{base}/download",
                 "restore_url": f"{base}/restore",
+                "delete_url": f"{base}/delete",
                 "status_url": f"{base}/status",
             },
         )
@@ -116,6 +117,42 @@ class BackupAdmin(BaseView):
             start_restore(name)
         except RuntimeError as exc:
             request.session["backup_flash"] = {"ok": False, "text": str(exc)}
+        return RedirectResponse(base, status_code=303)
+
+    @expose("/backups/delete", methods=["POST"])
+    async def delete(self, request: Request):
+        if not await _is_admin(request):
+            return PlainTextResponse("Доступ запрещён", status_code=403)
+
+        base = request.url.path.rstrip("/").rsplit("/delete", 1)[0]
+        form = await request.form()
+        source = str(form.get("source", ""))
+        name = str(form.get("name", ""))
+
+        try:
+            if source == "local":
+                backup_service.delete_local_backup(name)
+                where = "с сервера"
+            elif source == "remote":
+                if restore_state["running"] and restore_state["name"] == name:
+                    raise RuntimeError(
+                        "Этот файл сейчас используется для восстановления, удалить нельзя."
+                    )
+                await YaDisk().delete_backup(name)
+                where = "с Яндекс Диска (перемещён в корзину Диска)"
+            else:
+                raise RuntimeError("Неизвестный источник бэкапа.")
+
+            request.session["backup_flash"] = {
+                "ok": True,
+                "text": f"Бэкап {name} удалён {where}.",
+            }
+        except Exception as exc:
+            logging.exception("Ошибка удаления бэкапа")
+            request.session["backup_flash"] = {
+                "ok": False,
+                "text": f"{type(exc).__name__}: {exc}",
+            }
         return RedirectResponse(base, status_code=303)
 
     @expose("/backups/status", methods=["GET"])

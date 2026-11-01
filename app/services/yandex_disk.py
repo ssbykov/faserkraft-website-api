@@ -193,3 +193,19 @@ class YaDisk:
                 with dest.open("wb") as target:
                     async for chunk in response.content.iter_chunked(1024 * 1024):
                         target.write(chunk)
+
+    async def delete_backup(self, remote_name: str) -> None:
+        available = {item["name"] for item in await self.list_backups()}
+        if remote_name not in available:
+            raise YaDiskError("Такого файла нет на Яндекс Диске.")
+
+        timeout = aiohttp.ClientTimeout(total=60)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            status, _ = await self._api(
+                session,
+                "DELETE",
+                self.API_URL,
+                {"path": f"{self.folder}/{remote_name}"},
+            )
+        if status not in (202, 204):
+            raise YaDiskError(f"Не удалось удалить файл на Яндекс Диске, статус: {status}")

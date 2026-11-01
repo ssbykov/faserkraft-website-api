@@ -95,3 +95,9 @@ async def create_backup() -> Path:
 
         await YaDisk().upload_backup(final)
         return final
+
+def delete_local_backup(name: str) -> None:
+    path = resolve_backup(name)
+    if path is None:
+        raise RuntimeError("Файл не найден.")
+    path.unlink()

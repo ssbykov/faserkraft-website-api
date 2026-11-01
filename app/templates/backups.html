@@ -43,7 +43,15 @@
                     <td>{{ b.name }}</td>
                     <td>{{ b.created }}</td>
                     <td>{{ b.size_mb }}</td>
-                    <td><a href="{{ download_url }}?name={{ b.name | urlencode }}">Скачать</a></td>
+                    <td class="d-flex gap-3 align-items-center">
+                        <a href="{{ download_url }}?name={{ b.name | urlencode }}">Скачать</a>
+                        <form method="post" action="{{ delete_url }}" class="d-inline"
+                              onsubmit="return confirm('Удалить файл {{ b.name }} с сервера? Это действие необратимо.');">
+                            <input type="hidden" name="source" value="local">
+                            <input type="hidden" name="name" value="{{ b.name }}">
+                            <button type="submit" class="btn btn-sm btn-outline-danger">Удалить</button>
+                        </form>
+                    </td>
                 </tr>
                 {% else %}
                 <tr>
@@ -57,7 +65,7 @@
 
     <div class="card">
         <div class="card-header">
-            <h3 class="card-title">Копии на Яндекс Диске: восстановление</h3>
+            <h3 class="card-title">Копии на Яндекс Диске</h3>
         </div>
         <div class="card-body">
             <div class="alert alert-warning">
@@ -76,6 +84,7 @@
                     <th>Создан</th>
                     <th>Размер, МБ</th>
                     <th>Восстановление</th>
+                    <th></th>
                 </tr>
                 </thead>
                 <tbody>
@@ -93,10 +102,18 @@
                             <button type="submit" class="btn btn-danger">Восстановить</button>
                         </form>
                     </td>
+                    <td>
+                        <form method="post" action="{{ delete_url }}" class="d-inline"
+                              onsubmit="return confirm('Удалить файл {{ b.name }} с Яндекс Диска?');">
+                            <input type="hidden" name="source" value="remote">
+                            <input type="hidden" name="name" value="{{ b.name }}">
+                            <button type="submit" class="btn btn-sm btn-outline-danger">Удалить</button>
+                        </form>
+                    </td>
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="4">Копий на Яндекс Диске пока нет.</td>
+                    <td colspan="5">Копий на Яндекс Диске пока нет.</td>
                 </tr>
                 {% endfor %}
                 </tbody>
