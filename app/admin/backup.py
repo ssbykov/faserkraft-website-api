@@ -1,12 +1,22 @@
+import logging
+import time
+
 from sqladmin import BaseView, expose
 from sqlalchemy import select
 from starlette.requests import Request
-from starlette.responses import FileResponse, PlainTextResponse, RedirectResponse
+from starlette.responses import (
+    FileResponse,
+    JSONResponse,
+    PlainTextResponse,
+    RedirectResponse,
+)
 
 from app.admin.auth import SESSION_ROLE_KEY, SESSION_USER_KEY
 from app.db.session import AsyncSessionLocal
 from app.models import User
 from app.services import backup as backup_service
+from app.services.restore import restore_state, start_restore
+from app.services.yandex_disk import YaDisk
 
 
 async def _is_admin(request: Request) -> bool:
@@ -42,16 +52,31 @@ class BackupAdmin(BaseView):
                     "text": f"Бэкап создан: {path.name}",
                 }
             except Exception as exc:
-                request.session["backup_flash"] = {"ok": False, "text": str(exc)}
+                logging.exception("Ошибка создания бэкапа")
+                request.session["backup_flash"] = {
+                    "ok": False,
+                    "text": f"{type(exc).__name__}: {exc}",
+                }
             return RedirectResponse(base, status_code=303)
+
+        remote_backups, remote_error = [], None
+        try:
+            remote_backups = await YaDisk().list_backups()
+        except Exception as exc:
+            logging.exception("Не удалось получить список бэкапов с Яндекс Диска")
+            remote_error = f"{type(exc).__name__}: {exc}"
 
         return await self.templates.TemplateResponse(
             request,
             "backups.html",
             {
                 "backups": backup_service.list_backups(),
+                "remote_backups": remote_backups,
+                "remote_error": remote_error,
                 "flash": request.session.pop("backup_flash", None),
                 "download_url": f"{base}/download",
+                "restore_url": f"{base}/restore",
+                "status_url": f"{base}/status",
             },
         )
 
@@ -69,3 +94,36 @@ class BackupAdmin(BaseView):
             media_type="application/octet-stream",
             filename=path.name,
         )
+
+    @expose("/backups/restore", methods=["POST"])
+    async def restore(self, request: Request):
+        if not await _is_admin(request):
+            return PlainTextResponse("Доступ запрещён", status_code=403)
+
+        base = request.url.path.rstrip("/").rsplit("/restore", 1)[0]
+        form = await request.form()
+        name = str(form.get("name", ""))
+        confirm = str(form.get("confirm", "")).strip()
+
+        if not name or confirm != name:
+            request.session["backup_flash"] = {
+                "ok": False,
+                "text": "Подтверждение не совпало с именем файла, восстановление отменено.",
+            }
+            return RedirectResponse(base, status_code=303)
+
+        try:
+            start_restore(name)
+        except RuntimeError as exc:
+            request.session["backup_flash"] = {"ok": False, "text": str(exc)}
+        return RedirectResponse(base, status_code=303)
+
+    @expose("/backups/status", methods=["GET"])
+    async def status(self, request: Request):
+        if not await _is_admin(request):
+            return JSONResponse({"error": "forbidden"}, status_code=403)
+
+        data = dict(restore_state)
+        finished_at = data.pop("finished_at", None)
+        data["age"] = None if finished_at is None else time.time() - finished_at
+        return JSONResponse(data)

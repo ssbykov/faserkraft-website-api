@@ -141,3 +141,55 @@ class YaDisk:
                         raise YaDiskError(
                             f"Ошибка загрузки файла на Яндекс.Диск, статус: {response.status}"
                         )
+
+    async def list_backups(self) -> list[dict]:
+        timeout = aiohttp.ClientTimeout(total=60)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            status, data = await self._api(
+                session,
+                "GET",
+                self.API_URL,
+                {
+                    "path": self.folder,
+                    "limit": 200,
+                    "sort": "-created",
+                    "fields": "_embedded.items.name,_embedded.items.size,"
+                              "_embedded.items.created,_embedded.items.type",
+                },
+            )
+        if status == 404:
+            return []
+        if status != 200:
+            raise YaDiskError(f"Не удалось получить список бэкапов, статус: {status}")
+
+        items = data.get("_embedded", {}).get("items", [])
+        return [
+            {
+                "name": item["name"],
+                "size_mb": round(int(item.get("size", 0)) / 1024 / 1024, 2),
+                "created": str(item.get("created", ""))[:16].replace("T", " ") + " UTC",
+            }
+            for item in items
+            if item.get("type") == "file" and str(item.get("name", "")).endswith(".dump")
+        ]
+
+    async def download_backup(self, remote_name: str, dest: Path) -> None:
+        timeout = aiohttp.ClientTimeout(total=settings.YANDEX_DISK_TIMEOUT_SECONDS)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            status, data = await self._api(
+                session,
+                "GET",
+                f"{self.API_URL}/download",
+                {"path": f"{self.folder}/{remote_name}"},
+            )
+            href = str(data.get("href", ""))
+            if status != 200 or not href:
+                raise YaDiskError(f"Не удалось получить ссылку на скачивание, статус: {status}")
+
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            async with session.get(href) as response:
+                if response.status != 200:
+                    raise YaDiskError(f"Ошибка скачивания файла, статус: {response.status}")
+                with dest.open("wb") as target:
+                    async for chunk in response.content.iter_chunked(1024 * 1024):
+                        target.write(chunk)

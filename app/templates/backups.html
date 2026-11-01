@@ -1,37 +1,158 @@
 {% extends "sqladmin/layout.html" %}
 {% block content %}
 <div class="col-12">
-  <div class="card">
-    <div class="card-header">
-      <h3 class="card-title">Резервные копии базы данных</h3>
+    <div id="restore-progress" class="card mb-3" style="display:none">
+        <div class="card-body">
+            <div class="d-flex justify-content-between mb-2">
+                <strong id="rp-stage"></strong>
+                <span id="rp-percent"></span>
+            </div>
+            <div class="progress">
+                <div id="rp-bar" class="progress-bar progress-bar-striped progress-bar-animated"
+                     style="width: 0%"></div>
+            </div>
+            <div id="rp-result" class="mt-3"></div>
+        </div>
     </div>
-    <div class="card-body">
-      {% if flash %}
-        <div class="alert {{ 'alert-success' if flash.ok else 'alert-danger' }}">{{ flash.text }}</div>
-      {% endif %}
 
-      <form method="post" onsubmit="this.querySelector('button').disabled = true;">
-        <button type="submit" class="btn btn-primary">Создать бэкап</button>
-      </form>
+    <div class="card mb-3">
+        <div class="card-header">
+            <h3 class="card-title">Резервные копии на сервере</h3>
+        </div>
+        <div class="card-body">
+            {% if flash %}
+            <div class="alert {{ 'alert-success' if flash.ok else 'alert-danger' }}">{{ flash.text }}</div>
+            {% endif %}
 
-      <table class="table table-vcenter mt-4">
-        <thead>
-          <tr><th>Файл</th><th>Создан</th><th>Размер, МБ</th><th></th></tr>
-        </thead>
-        <tbody>
-          {% for b in backups %}
-          <tr>
-            <td>{{ b.name }}</td>
-            <td>{{ b.created }}</td>
-            <td>{{ b.size_mb }}</td>
-            <td><a href="{{ download_url }}?name={{ b.name | urlencode }}">Скачать</a></td>
-          </tr>
-          {% else %}
-          <tr><td colspan="4">Бэкапов пока нет.</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
+            <form method="post" onsubmit="this.querySelector('button').disabled = true;">
+                <button type="submit" class="btn btn-primary">Создать бэкап</button>
+            </form>
+
+            <table class="table table-vcenter mt-4">
+                <thead>
+                <tr>
+                    <th>Файл</th>
+                    <th>Создан</th>
+                    <th>Размер, МБ</th>
+                    <th></th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for b in backups %}
+                <tr>
+                    <td>{{ b.name }}</td>
+                    <td>{{ b.created }}</td>
+                    <td>{{ b.size_mb }}</td>
+                    <td><a href="{{ download_url }}?name={{ b.name | urlencode }}">Скачать</a></td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="4">Бэкапов пока нет.</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
     </div>
-  </div>
+
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">Копии на Яндекс Диске: восстановление</h3>
+        </div>
+        <div class="card-body">
+            <div class="alert alert-warning">
+                Восстановление полностью заменяет текущую базу данных. Перед заменой автоматически
+                создаётся страховочная копия. Чтобы подтвердить, введите имя файла.
+            </div>
+
+            {% if remote_error %}
+            <div class="alert alert-danger">{{ remote_error }}</div>
+            {% endif %}
+
+            <table class="table table-vcenter">
+                <thead>
+                <tr>
+                    <th>Файл</th>
+                    <th>Создан</th>
+                    <th>Размер, МБ</th>
+                    <th>Восстановление</th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for b in remote_backups %}
+                <tr>
+                    <td>{{ b.name }}</td>
+                    <td>{{ b.created }}</td>
+                    <td>{{ b.size_mb }}</td>
+                    <td>
+                        <form method="post" action="{{ restore_url }}" class="d-flex gap-2"
+                              onsubmit="if (!confirm('Текущая база будет заменена. Продолжить?')) { return false; } this.querySelector('button').disabled = true;">
+                            <input type="hidden" name="name" value="{{ b.name }}">
+                            <input type="text" name="confirm" class="form-control" placeholder="Введите имя файла"
+                                   autocomplete="off" required>
+                            <button type="submit" class="btn btn-danger">Восстановить</button>
+                        </form>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="4">Копий на Яндекс Диске пока нет.</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
 </div>
+
+<script>
+    (function () {
+      const url = "{{ status_url }}";
+      const box = document.getElementById("restore-progress");
+      const bar = document.getElementById("rp-bar");
+      const stage = document.getElementById("rp-stage");
+      const percent = document.getElementById("rp-percent");
+      const result = document.getElementById("rp-result");
+
+      function show(s) {
+        box.style.display = "block";
+        stage.textContent = s.stage || "";
+        percent.textContent = s.percent + "%";
+        bar.style.width = s.percent + "%";
+      }
+
+      function finish(s) {
+        show(s);
+        bar.classList.remove("progress-bar-animated");
+        bar.classList.add(s.ok ? "bg-success" : "bg-danger");
+        const cls = s.ok ? "alert-success" : "alert-danger";
+        result.innerHTML = '<div class="alert ' + cls + ' mb-0"></div>';
+        result.firstChild.textContent = s.message;
+      }
+
+      async function poll() {
+        let response;
+        try {
+          response = await fetch(url, { credentials: "same-origin" });
+        } catch (e) {
+          setTimeout(poll, 3000);
+          return;
+        }
+        if (response.status === 403) {
+          box.style.display = "block";
+          result.innerHTML = '<div class="alert alert-warning mb-0">Сессия недействительна: возможно, в восстановленной базе нет вашей учётной записи. Войдите заново.</div>';
+          return;
+        }
+        const s = await response.json();
+        if (s.running) {
+          show(s);
+          setTimeout(poll, 1500);
+        } else if (s.ok !== null && s.age !== null && s.age < 300) {
+          finish(s);
+        }
+      }
+
+      poll();
+    })();
+</script>
 {% endblock %}
