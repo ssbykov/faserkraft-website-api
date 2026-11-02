@@ -113,7 +113,7 @@ class PageOut(PageBase):
     menu_parent_labels: list[str] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
-    page_type: PageTypeOut
+    page_type: PageTypeDetailOut
     images: list[PageImageOut] = Field(default_factory=list)
     documents: list[PageDocumentOut] = Field(default_factory=list)
     children: list[PageListItem] = Field(default_factory=list)
@@ -130,3 +130,11 @@ class PageDocumentOut(PageDocumentBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+
+
+class PageTypeDetailOut(PageTypeOut):
+    cta_eyebrow: Optional[str] = None
+    cta_title: Optional[str] = None
+    cta_text: Optional[str] = None
+    cta_button: Optional[str] = None
+    cta_href: Optional[str] = None

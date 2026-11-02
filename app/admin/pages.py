@@ -13,9 +13,25 @@ class PageTypeAdmin(ModelView, model=PageType):
     name = "Тип страницы"
     name_plural = "Типы страниц"
     icon = "fa-solid fa-tags"
-    column_list = [PageType.id, PageType.code, PageType.name, PageType.template]
+    column_list = [PageType.id, PageType.code, PageType.name, PageType.cta_title]
     column_searchable_list = [PageType.code, PageType.name]
-    form_columns = [PageType.code, PageType.name, PageType.template]
+    form_columns = [
+        PageType.code,
+        PageType.name,
+        PageType.template,
+        PageType.cta_eyebrow,
+        PageType.cta_title,
+        PageType.cta_text,
+        PageType.cta_button,
+        PageType.cta_href,
+    ]
+    column_labels = {
+        PageType.cta_eyebrow: "CTA: надзаголовок",
+        PageType.cta_title: "CTA: заголовок",
+        PageType.cta_text: "CTA: текст",
+        PageType.cta_button: "CTA: текст кнопки",
+        PageType.cta_href: "CTA: ссылка кнопки",
+    }
 
 
 class PageAdmin(ModelView, model=Page):

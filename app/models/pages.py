@@ -22,6 +22,12 @@ class PageType(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     template: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
+    cta_eyebrow: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    cta_title: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    cta_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    cta_button: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    cta_href: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+
     pages: Mapped[list["Page"]] = relationship(back_populates="page_type")
 
     def __repr__(self) -> str:
