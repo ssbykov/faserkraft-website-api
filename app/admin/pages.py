@@ -65,6 +65,7 @@ class PageAdmin(ModelView, model=Page):
         Page.status,
         Page.seo_title,
         Page.seo_description,
+        Page.noindex,
         Page.sort_order,
     ]
     form_ajax_refs = {

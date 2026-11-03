@@ -41,6 +41,7 @@ class PageBase(BaseModel):
     seo_title: Optional[str] = None
     seo_description: Optional[str] = None
     sort_order: int = 0
+    noindex: bool = False
 
 
 class PageCreate(PageBase):
@@ -59,6 +60,7 @@ class PageUpdate(BaseModel):
     seo_title: Optional[str] = None
     seo_description: Optional[str] = None
     sort_order: Optional[int] = None
+    noindex: bool = False
 
 
 class PageListItem(BaseModel):
@@ -73,6 +75,7 @@ class PageListItem(BaseModel):
     sort_order: int
     parent_id: Optional[int] = None
     page_type: PageTypeOut
+    noindex: bool = False
 
 
 class PageTreeItem(BaseModel):

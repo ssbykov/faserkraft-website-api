@@ -8,6 +8,7 @@ from typing import Optional
 
 from sqlalchemy import ForeignKey, Text, Boolean, Integer, String, DateTime, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.sql import expression
 
 from app.db.session import Base
 
@@ -54,6 +55,12 @@ class Page(Base):
     title: Mapped[str] = mapped_column(String(500), nullable=False)
     content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(50), default="published")
+    noindex: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        server_default=expression.false(),
+        nullable=False,
+    )
     seo_title: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     seo_description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
