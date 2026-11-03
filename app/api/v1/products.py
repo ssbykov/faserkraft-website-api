@@ -11,7 +11,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.db.session import get_db
-from app.models import Product, ProductCategory, ProductSpecification
+from app.models import (
+    Product,
+    ProductCategory,
+    ProductSpecification,
+    SpecificationParameter,
+)
 from app.schemas.products import ProductFiltersResponse, FilterOption
 from app.schemas.schemas import (
     ProductListItem,
@@ -19,6 +24,84 @@ from app.schemas.schemas import (
 )
 
 router = APIRouter(prefix="/products", tags=["products"])
+
+
+def specs_with_parameter(name_pattern: str):
+    """Характеристики, у которых название параметра подходит под шаблон."""
+    return (
+        select(ProductSpecification)
+        .join(
+            SpecificationParameter,
+            SpecificationParameter.id == ProductSpecification.parameter_id,
+        )
+        .where(SpecificationParameter.name.ilike(name_pattern))
+    )
+
+
+def product_ids_by_spec(name_pattern: str, value_pattern: str):
+    subq = specs_with_parameter(name_pattern).where(
+        ProductSpecification.value.ilike(value_pattern)
+    )
+    return select(subq.subquery().c.product_id)
+
+
+def material_condition(material: str):
+    return (
+        (Product.membrane_material.ilike(f"%{material}%"))
+        | (Product.name.ilike(f"%{material}%"))
+        | (Product.slug.ilike(f"%{material}%"))
+        | Product.id.in_(product_ids_by_spec("%материал%", f"%{material}%"))
+    )
+
+
+def clean_area_number(area: str) -> str:
+    """Оставляет только число: '8.0 м²' -> '8.0'."""
+    return re.sub(r"[^\d.,]", "", area).replace(",", ".")
+
+
+def area_condition(area: str):
+    clean_num = clean_area_number(area)
+    return (
+        (Product.slug.ilike(f"%-{clean_num}-%"))
+        | (Product.slug.ilike(f"%-{clean_num}p-%"))
+        | (Product.name.ilike(f"%-{clean_num}-%"))
+        | (Product.name.ilike(f"% {clean_num} м²%"))
+        | Product.id.in_(product_ids_by_spec("%площадь%", f"%{clean_num}%"))
+    )
+
+
+def published_product_ids(category_slug: Optional[str]):
+    stmt = select(Product.id).where(Product.is_published.is_(True))
+    if category_slug:
+        stmt = stmt.join(Product.category).where(
+            ProductCategory.slug == category_slug
+        )
+    return stmt
+
+
+async def distinct_spec_values(
+    db: AsyncSession, product_ids, name_pattern: str
+) -> list[str]:
+    stmt = (
+        select(distinct(ProductSpecification.value))
+        .join(
+            SpecificationParameter,
+            SpecificationParameter.id == ProductSpecification.parameter_id,
+        )
+        .where(
+            ProductSpecification.product_id.in_(product_ids),
+            SpecificationParameter.name.ilike(name_pattern),
+            ProductSpecification.value.is_not(None),
+            ProductSpecification.value != "",
+        )
+    )
+    result = await db.execute(stmt)
+    return [value.strip() for value in result.scalars().all() if value and value.strip()]
+
+
+def parse_area_num(val: str) -> float:
+    nums = re.findall(r"\d+(?:[.,]\d+)?", val)
+    return float(nums[0].replace(",", ".")) if nums else 0.0
 
 
 @router.get("", response_model=list[ProductListItem])
@@ -39,7 +122,6 @@ async def list_products(
         .options(
             selectinload(Product.category),
             selectinload(Product.images),
-            selectinload(Product.specifications),
         )
         .where(Product.is_published.is_(True))
         .order_by(Product.name)
@@ -50,48 +132,11 @@ async def list_products(
             ProductCategory.slug == category_slug
         )
 
-    # Фильтрация по материалу
     if material:
-        stmt = stmt.where(
-            (Product.membrane_material.ilike(f"%{material}%"))
-            | (Product.name.ilike(f"%{material}%"))
-            | (Product.slug.ilike(f"%{material}%"))
-            | (
-                Product.id.in_(
-                    select(ProductSpecification.product_id).where(
-                        ProductSpecification.parameter_name.ilike(
-                            "%материал%"
-                        ),
-                        ProductSpecification.parameter_value.ilike(
-                            f"%{material}%"
-                        ),
-                    )
-                )
-            )
-        )
+        stmt = stmt.where(material_condition(material))
 
-    # Фильтрация по площади
     if area:
-        # Извлекаем только числовое значение (например '8' из '8.0 м²')
-        clean_num = re.sub(r"[^\d.,]", "", area).replace(",", ".")
-        stmt = stmt.where(
-            (Product.slug.ilike(f"%-{clean_num}-%"))
-            | (Product.slug.ilike(f"%-{clean_num}p-%"))
-            | (Product.name.ilike(f"%-{clean_num}-%"))
-            | (Product.name.ilike(f"% {clean_num} м²%"))
-            | (
-                Product.id.in_(
-                    select(ProductSpecification.product_id).where(
-                        ProductSpecification.parameter_name.ilike(
-                            "%площадь%"
-                        ),
-                        ProductSpecification.parameter_value.ilike(
-                            f"%{clean_num}%"
-                        ),
-                    )
-                )
-            )
-        )
+        stmt = stmt.where(area_condition(area))
 
     stmt = stmt.offset((page - 1) * page_size).limit(page_size)
     result = await db.execute(stmt)
@@ -107,103 +152,27 @@ async def get_product_filters(
 ):
     """Возвращает контекстно-зависимые опции фильтрации (материалы и площади) из базы данных."""
 
-    def parse_area_num(val: str) -> float:
-        nums = re.findall(r"\d+(?:[.,]\d+)?", val)
-        return float(nums[0].replace(",", ".")) if nums else 0.0
-
-    # 1. Запрос доступных материалов (с учётом выбранной категории и площади)
-    base_prod_for_mat = (
-        select(Product.id)
-        .where(Product.is_published.is_(True))
-    )
-    if category_slug:
-        base_prod_for_mat = base_prod_for_mat.join(Product.category).where(
-            ProductCategory.slug == category_slug
-        )
+    # Материалы: с учётом выбранной категории и площади
+    base_for_materials = published_product_ids(category_slug)
     if area:
-        clean_num = re.sub(r"[^\d.,]", "", area).replace(",", ".")
-        base_prod_for_mat = base_prod_for_mat.where(
-            (Product.slug.ilike(f"%-{clean_num}-%"))
-            | (Product.slug.ilike(f"%-{clean_num}p-%"))
-            | (Product.name.ilike(f"%-{clean_num}-%"))
-            | (Product.name.ilike(f"% {clean_num} м²%"))
-            | (
-                Product.id.in_(
-                    select(ProductSpecification.product_id).where(
-                        ProductSpecification.parameter_name.ilike("%площадь%"),
-                        ProductSpecification.parameter_value.ilike(f"%{clean_num}%"),
-                    )
-                )
-            )
-        )
+        base_for_materials = base_for_materials.where(area_condition(area))
 
-    # Собираем материалы для отфильтрованного набора товаров
-    mat_stmt = (
-        select(distinct(ProductSpecification.parameter_value))
-        .where(
-            ProductSpecification.product_id.in_(base_prod_for_mat),
-            ProductSpecification.parameter_name.ilike("%материал%"),
-            ProductSpecification.parameter_value.is_not(None),
-            ProductSpecification.parameter_value != "",
-        )
-    )
-    mat_res = await db.execute(mat_stmt)
-    raw_materials = mat_res.scalars().all()
+    raw_materials = await distinct_spec_values(db, base_for_materials, "%материал%")
+    materials = [FilterOption(label=m, value=m) for m in sorted(set(raw_materials))]
 
-    materials = [
-        FilterOption(label=m.strip(), value=m.strip())
-        for m in sorted(raw_materials)
-        if m and m.strip()
-    ]
-
-    # 2. Запрос доступных площадей (с учётом выбранной категории и материала)
-    base_prod_for_area = (
-        select(Product.id)
-        .where(Product.is_published.is_(True))
-    )
-    if category_slug:
-        base_prod_for_area = base_prod_for_area.join(Product.category).where(
-            ProductCategory.slug == category_slug
-        )
+    # Площади: с учётом выбранной категории и материала
+    base_for_areas = published_product_ids(category_slug)
     if material:
-        base_prod_for_area = base_prod_for_area.where(
-            (Product.membrane_material.ilike(f"%{material}%"))
-            | (Product.name.ilike(f"%{material}%"))
-            | (Product.slug.ilike(f"%{material}%"))
-            | (
-                Product.id.in_(
-                    select(ProductSpecification.product_id).where(
-                        ProductSpecification.parameter_name.ilike("%материал%"),
-                        ProductSpecification.parameter_value.ilike(f"%{material}%"),
-                    )
-                )
-            )
-        )
+        base_for_areas = base_for_areas.where(material_condition(material))
 
-    area_stmt = (
-        select(distinct(ProductSpecification.parameter_value))
-        .where(
-            ProductSpecification.product_id.in_(base_prod_for_area),
-            ProductSpecification.parameter_name.ilike("%площадь%"),
-            ProductSpecification.parameter_value.is_not(None),
-            ProductSpecification.parameter_value != "",
-        )
-    )
-    area_res = await db.execute(area_stmt)
-    raw_areas = area_res.scalars().all()
-
-    sorted_raw_areas = sorted(
-        [a.strip() for a in raw_areas if a and a.strip()],
-        key=parse_area_num,
-    )
-
+    raw_areas = await distinct_spec_values(db, base_for_areas, "%площадь%")
     areas = [
         FilterOption(label=a, value=a)
-        for a in sorted_raw_areas
-        if a
+        for a in sorted(set(raw_areas), key=parse_area_num)
     ]
 
     return ProductFiltersResponse(materials=materials, areas=areas)
+
 
 @router.get("/{slug}", response_model=ProductOut)
 async def get_product(slug: str, db: AsyncSession = Depends(get_db)):
@@ -211,7 +180,9 @@ async def get_product(slug: str, db: AsyncSession = Depends(get_db)):
         select(Product)
         .options(
             selectinload(Product.category),
-            selectinload(Product.specifications),
+            selectinload(Product.specifications)
+            .selectinload(ProductSpecification.parameter)
+            .selectinload(SpecificationParameter.group),
             selectinload(Product.images),
             selectinload(Product.documents),
         )
@@ -224,7 +195,3 @@ async def get_product(slug: str, db: AsyncSession = Depends(get_db)):
             status_code=status.HTTP_404_NOT_FOUND, detail="Продукт не найден"
         )
     return product
-
-
-
-

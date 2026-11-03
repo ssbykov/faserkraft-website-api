@@ -9,6 +9,8 @@ from app.models.catalog import (
     ProductDocument,
     ProductImage,
     ProductSpecification,
+    SpecificationGroup,
+    SpecificationParameter,
 )
 from app.models.homepage import HomepageCard, HomepageSection
 from app.models.leads import LeadRequest
@@ -24,6 +26,8 @@ __all__ = [
     "ProductDocument",
     "ProductImage",
     "ProductSpecification",
+    "SpecificationGroup",
+    "SpecificationParameter",
     "Page",
     "PageImage",
     "PageDocument",

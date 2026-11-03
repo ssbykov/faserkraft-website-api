@@ -2,10 +2,20 @@
 app/models/catalog.py
 Модели каталога продукции: категории, товары, характеристики, изображения, документы
 """
+
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import ForeignKey, Text, Boolean, Integer, String, DateTime, func
+from sqlalchemy import (
+    ForeignKey,
+    Text,
+    Boolean,
+    Integer,
+    String,
+    DateTime,
+    func,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import expression
 
@@ -16,12 +26,16 @@ class ProductCategory(Base):
     __tablename__ = "product_categories"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    slug: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
+    slug: Mapped[str] = mapped_column(
+        String(255), unique=True, nullable=False, index=True
+    )
     name: Mapped[str] = mapped_column(String(500), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
     is_published: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
     products: Mapped[list["Product"]] = relationship(back_populates="category")
 
@@ -33,9 +47,15 @@ class Product(Base):
     __tablename__ = "products"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    legacy_wp_id: Mapped[Optional[int]] = mapped_column(Integer, unique=True, nullable=True)
-    category_id: Mapped[Optional[int]] = mapped_column(ForeignKey("product_categories.id"), nullable=True)
-    slug: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
+    legacy_wp_id: Mapped[Optional[int]] = mapped_column(
+        Integer, unique=True, nullable=True
+    )
+    category_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("product_categories.id"), nullable=True
+    )
+    slug: Mapped[str] = mapped_column(
+        String(255), unique=True, nullable=False, index=True
+    )
     name: Mapped[str] = mapped_column(String(500), nullable=False)
     short_description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -49,36 +69,116 @@ class Product(Base):
     )
     seo_title: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     seo_description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
-    category: Mapped[Optional["ProductCategory"]] = relationship(back_populates="products")
+    category: Mapped[Optional["ProductCategory"]] = relationship(
+        back_populates="products"
+    )
     specifications: Mapped[list["ProductSpecification"]] = relationship(
-        back_populates="product", cascade="all, delete-orphan", order_by="ProductSpecification.sort_order"
+        back_populates="product", cascade="all, delete-orphan"
     )
     images: Mapped[list["ProductImage"]] = relationship(
-        back_populates="product", cascade="all, delete-orphan", order_by="ProductImage.sort_order"
+        back_populates="product",
+        cascade="all, delete-orphan",
+        order_by="ProductImage.sort_order",
     )
     documents: Mapped[list["ProductDocument"]] = relationship(
-        back_populates="product", cascade="all, delete-orphan", order_by="ProductDocument.sort_order"
+        back_populates="product",
+        cascade="all, delete-orphan",
+        order_by="ProductDocument.sort_order",
     )
 
     def __repr__(self) -> str:
         return self.name
 
-class ProductSpecification(Base):
-    __tablename__ = "product_specifications"
+
+class SpecificationGroup(Base):
+    __tablename__ = "specification_groups"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="CASCADE"), nullable=False)
-    group_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    parameter_name: Mapped[str] = mapped_column(String(500), nullable=False)
-    parameter_value: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    name: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
 
+    parameters: Mapped[list["SpecificationParameter"]] = relationship(
+        back_populates="group", order_by="SpecificationParameter.sort_order"
+    )
+
+    def __repr__(self) -> str:
+        return self.name
+
+
+class SpecificationParameter(Base):
+    __tablename__ = "specification_parameters"
+    __table_args__ = (UniqueConstraint("group_id", "name"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    group_id: Mapped[int] = mapped_column(
+        ForeignKey("specification_groups.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    code: Mapped[Optional[str]] = mapped_column(String(100), unique=True, nullable=True)
+    name: Mapped[str] = mapped_column(String(500), nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+
+    group: Mapped["SpecificationGroup"] = relationship(
+        back_populates="parameters",
+        lazy="joined",
+        innerjoin=True,
+    )
+
+    def __repr__(self) -> str:
+        return self.name
+
+
+class ProductSpecification(Base):
+    __tablename__ = "product_specifications"
+    __table_args__ = (
+        UniqueConstraint(
+            "product_id",
+            "parameter_id",
+            name="uq_product_specifications_product_parameter",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    product_id: Mapped[int] = mapped_column(
+        ForeignKey("products.id", ondelete="CASCADE"), nullable=False
+    )
+    parameter_id: Mapped[int] = mapped_column(
+        ForeignKey("specification_parameters.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    value: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+
     product: Mapped["Product"] = relationship(back_populates="specifications")
+    parameter: Mapped["SpecificationParameter"] = relationship(
+        lazy="joined",
+        innerjoin=True,
+    )
+
+    # Плоский вид для текущего API и фронтенда
+    @property
+    def group_name(self) -> str:
+        return self.parameter.group.name
+
+    @property
+    def parameter_name(self) -> str:
+        return self.parameter.name
+
+    @property
+    def parameter_value(self) -> Optional[str]:
+        return self.value
+
+    @property
+    def sort_order(self) -> int:
+        return self.parameter.group.sort_order * 1000 + self.parameter.sort_order
 
     def __repr__(self) -> str:
         return self.parameter_name
@@ -88,7 +188,9 @@ class ProductImage(Base):
     __tablename__ = "product_images"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="CASCADE"), nullable=False)
+    product_id: Mapped[int] = mapped_column(
+        ForeignKey("products.id", ondelete="CASCADE"), nullable=False
+    )
     image_url: Mapped[str] = mapped_column(String(1000), nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
 
@@ -99,7 +201,9 @@ class ProductDocument(Base):
     __tablename__ = "product_documents"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    product_id: Mapped[Optional[int]] = mapped_column(ForeignKey("products.id", ondelete="CASCADE"), nullable=True)
+    product_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("products.id", ondelete="CASCADE"), nullable=True
+    )
     document_type: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     title: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     file_url: Mapped[str] = mapped_column(String(1000), nullable=False)

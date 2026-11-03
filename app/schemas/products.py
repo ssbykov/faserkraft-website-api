@@ -5,8 +5,7 @@ Pydantic v2 схемы каталога продукции.
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field
-
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 class ProductCategoryBase(BaseModel):
     slug: str
@@ -109,6 +108,11 @@ class ProductOut(ProductBase):
     specifications: list[ProductSpecificationOut] = Field(default_factory=list)
     images: list[ProductImageOut] = Field(default_factory=list)
     documents: list[ProductDocumentOut] = Field(default_factory=list)
+    @field_validator("specifications", mode="after")
+    @classmethod
+    def sort_specifications(cls, value):
+        return sorted(value, key=lambda spec: (spec.sort_order, spec.id))
+
 
 class FilterOption(BaseModel):
     label: str

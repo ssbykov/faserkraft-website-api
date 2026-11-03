@@ -4,7 +4,7 @@ app/admin/catalog.py
 """
 
 from sqladmin import ModelView
-from sqladmin.filters import BooleanFilter
+from sqladmin.filters import BooleanFilter, ForeignKeyFilter
 
 from app.models import (
     Product,
@@ -12,6 +12,8 @@ from app.models import (
     ProductDocument,
     ProductImage,
     ProductSpecification,
+    SpecificationGroup,
+    SpecificationParameter,
 )
 
 
@@ -69,6 +71,51 @@ class ProductAdmin(ModelView, model=Product):
     can_export = True
 
 
+class SpecificationGroupAdmin(ModelView, model=SpecificationGroup):
+    name = "Группа характеристик"
+    name_plural = "Группы характеристик"
+    icon = "fa-solid fa-folder-tree"
+    column_list = [
+        SpecificationGroup.id,
+        SpecificationGroup.name,
+        SpecificationGroup.sort_order,
+    ]
+    column_searchable_list = [SpecificationGroup.name]
+    column_sortable_list = [SpecificationGroup.id, SpecificationGroup.sort_order]
+    form_columns = [SpecificationGroup.name, SpecificationGroup.sort_order]
+
+
+class SpecificationParameterAdmin(ModelView, model=SpecificationParameter):
+    name = "Параметр характеристики"
+    name_plural = "Параметры характеристик"
+    icon = "fa-solid fa-sliders"
+    column_list = [
+        SpecificationParameter.id,
+        SpecificationParameter.group,
+        SpecificationParameter.name,
+        SpecificationParameter.code,
+        SpecificationParameter.sort_order,
+    ]
+    column_searchable_list = [SpecificationParameter.name, SpecificationParameter.code]
+    column_sortable_list = [
+        SpecificationParameter.id,
+        SpecificationParameter.sort_order,
+    ]
+    column_filters = [
+        ForeignKeyFilter(
+            SpecificationParameter.group_id,
+            SpecificationGroup.name,
+            title="Группа",
+        ),
+    ]
+    form_columns = [
+        SpecificationParameter.group,
+        SpecificationParameter.name,
+        SpecificationParameter.code,
+        SpecificationParameter.sort_order,
+    ]
+
+
 class ProductSpecificationAdmin(ModelView, model=ProductSpecification):
     name = "Характеристика"
     name_plural = "Характеристики"
@@ -76,23 +123,31 @@ class ProductSpecificationAdmin(ModelView, model=ProductSpecification):
     column_list = [
         ProductSpecification.id,
         ProductSpecification.product,
-        ProductSpecification.group_name,
-        ProductSpecification.parameter_name,
-        ProductSpecification.parameter_value,
-        ProductSpecification.sort_order,
+        ProductSpecification.parameter,
+        ProductSpecification.value,
     ]
-    column_searchable_list = [
-        ProductSpecification.parameter_name,
-        ProductSpecification.parameter_value,
+    column_searchable_list = [ProductSpecification.value]
+    column_filters = [
+        ForeignKeyFilter(
+            ProductSpecification.product_id,
+            Product.name,
+            title="Товар",
+        ),
+        ForeignKeyFilter(
+            ProductSpecification.parameter_id,
+            SpecificationParameter.name,
+            title="Параметр",
+        ),
     ]
-    column_sortable_list = [ProductSpecification.sort_order]
     form_columns = [
         ProductSpecification.product,
-        ProductSpecification.group_name,
-        ProductSpecification.parameter_name,
-        ProductSpecification.parameter_value,
-        ProductSpecification.sort_order,
+        ProductSpecification.parameter,
+        ProductSpecification.value,
     ]
+    form_ajax_refs = {
+        "product": {"fields": ("name", "slug"), "order_by": "name"},
+        "parameter": {"fields": ("name",), "order_by": "name"},
+    }
 
 
 class ProductImageAdmin(ModelView, model=ProductImage):
@@ -136,6 +191,8 @@ class ProductDocumentAdmin(ModelView, model=ProductDocument):
 CATALOG_VIEWS = [
     ProductCategoryAdmin,
     ProductAdmin,
+    SpecificationGroupAdmin,
+    SpecificationParameterAdmin,
     ProductSpecificationAdmin,
     ProductImageAdmin,
     ProductDocumentAdmin,
