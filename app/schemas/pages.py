@@ -37,7 +37,7 @@ class PageBase(BaseModel):
     slug: str
     title: str
     content: Optional[str] = None
-    status: str = "published"
+    is_published: bool = True
     seo_title: Optional[str] = None
     seo_description: Optional[str] = None
     sort_order: int = 0
@@ -56,11 +56,11 @@ class PageUpdate(BaseModel):
     slug: Optional[str] = None
     title: Optional[str] = None
     content: Optional[str] = None
-    status: Optional[str] = None
+    is_published: Optional[bool] = None
     seo_title: Optional[str] = None
     seo_description: Optional[str] = None
     sort_order: Optional[int] = None
-    noindex: bool = False
+    noindex: Optional[bool] = None
 
 
 class PageListItem(BaseModel):
@@ -71,7 +71,7 @@ class PageListItem(BaseModel):
     id: int
     slug: str
     title: str
-    status: str
+    is_published: bool
     sort_order: int
     parent_id: Optional[int] = None
     page_type: PageTypeOut
@@ -92,7 +92,7 @@ class PageTreeItem(BaseModel):
     id: int
     slug: str
     title: str
-    status: str
+    is_published: bool
     sort_order: int
     parent_id: Optional[int] = None
     page_type: PageTypeOut

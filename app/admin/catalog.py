@@ -4,7 +4,7 @@ app/admin/catalog.py
 """
 
 from sqladmin import ModelView
-from sqladmin.filters import StaticValuesFilter
+from sqladmin.filters import BooleanFilter
 
 from app.models import (
     Product,
@@ -47,16 +47,13 @@ class ProductAdmin(ModelView, model=Product):
         Product.slug,
         Product.name,
         Product.category,
-        Product.status,
+        Product.is_published,
         Product.updated_at,
     ]
     column_searchable_list = [Product.name, Product.slug]
     column_sortable_list = [Product.id, Product.updated_at]
     column_filters = [
-        StaticValuesFilter(
-            Product.status,
-            values=[("published", "Опубликован"), ("draft", "Черновик")],
-        ),
+        BooleanFilter(Product.is_published, title="Опубликован"),
     ]
     form_columns = [
         Product.category,
@@ -65,7 +62,7 @@ class ProductAdmin(ModelView, model=Product):
         Product.short_description,
         Product.description,
         Product.membrane_material,
-        Product.status,
+        Product.is_published,
         Product.seo_title,
         Product.seo_description,
     ]

@@ -4,7 +4,7 @@ app/admin/pages.py
 """
 
 from sqladmin import ModelView
-from sqladmin.filters import StaticValuesFilter, ForeignKeyFilter
+from sqladmin.filters import ForeignKeyFilter, BooleanFilter
 
 from app.models import Page, PageImage, PageType
 
@@ -44,16 +44,15 @@ class PageAdmin(ModelView, model=Page):
         Page.title,
         Page.page_type,
         Page.parent,
-        Page.status,
+        Page.is_published,
+        Page.noindex,
         Page.updated_at,
     ]
     column_searchable_list = [Page.title, Page.slug]
     column_sortable_list = [Page.id, Page.sort_order, Page.updated_at]
     column_filters = [
-        StaticValuesFilter(
-            Page.status,
-            values=[("published", "Опубликована"), ("draft", "Черновик")],
-        ),
+        BooleanFilter(Page.is_published, title="Опубликована"),
+        BooleanFilter(Page.noindex, title="Не индексировать"),
         ForeignKeyFilter(Page.page_type_id, PageType.name, title="Тип страницы"),
     ]
     form_columns = [
@@ -62,12 +61,16 @@ class PageAdmin(ModelView, model=Page):
         Page.slug,
         Page.title,
         Page.content,
-        Page.status,
+        Page.is_published,
         Page.seo_title,
         Page.seo_description,
         Page.noindex,
         Page.sort_order,
     ]
+    column_labels = {
+        Page.is_published: "Опубликована",
+        Page.noindex: "Не индексировать",
+    }
     form_ajax_refs = {
         "parent": {
             "fields": ("title", "slug"),

@@ -41,7 +41,7 @@ async def list_products(
             selectinload(Product.images),
             selectinload(Product.specifications),
         )
-        .where(Product.status == "published")
+        .where(Product.is_published.is_(True))
         .order_by(Product.name)
     )
 
@@ -114,7 +114,7 @@ async def get_product_filters(
     # 1. Запрос доступных материалов (с учётом выбранной категории и площади)
     base_prod_for_mat = (
         select(Product.id)
-        .where(Product.status == "published")
+        .where(Product.is_published.is_(True))
     )
     if category_slug:
         base_prod_for_mat = base_prod_for_mat.join(Product.category).where(
@@ -159,7 +159,7 @@ async def get_product_filters(
     # 2. Запрос доступных площадей (с учётом выбранной категории и материала)
     base_prod_for_area = (
         select(Product.id)
-        .where(Product.status == "published")
+        .where(Product.is_published.is_(True))
     )
     if category_slug:
         base_prod_for_area = base_prod_for_area.join(Product.category).where(
@@ -215,7 +215,7 @@ async def get_product(slug: str, db: AsyncSession = Depends(get_db)):
             selectinload(Product.images),
             selectinload(Product.documents),
         )
-        .where(Product.slug == slug, Product.status == "published")
+        .where(Product.slug == slug, Product.is_published.is_(True))
     )
     result = await db.execute(stmt)
     product = result.scalar_one_or_none()

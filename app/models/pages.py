@@ -54,7 +54,13 @@ class Page(Base):
     )
     title: Mapped[str] = mapped_column(String(500), nullable=False)
     content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    status: Mapped[str] = mapped_column(String(50), default="published")
+    is_published: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
+        server_default=expression.true(),
+        nullable=False,
+        index=True,
+    )
     noindex: Mapped[bool] = mapped_column(
         Boolean,
         default=False,

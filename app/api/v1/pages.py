@@ -39,7 +39,7 @@ async def list_pages(
     stmt = (
         select(Page)
         .options(selectinload(Page.page_type))
-        .where(Page.status == "published")
+        .where(Page.is_published.is_(True))
         .order_by(Page.sort_order, Page.title)
     )
 
@@ -76,7 +76,7 @@ async def get_pages_tree(db: AsyncSession = Depends(get_db)):
             selectinload(Page.children).selectinload(Page.page_type),
         )
         .where(
-            Page.status == "published",
+            Page.is_published.is_(True),
             Page.parent_id.is_(None),
         )
         .order_by(Page.sort_order, Page.title)
@@ -87,7 +87,7 @@ async def get_pages_tree(db: AsyncSession = Depends(get_db)):
 
     def to_tree_item(page_obj: Page) -> PageTreeItem:
         children = sorted(
-            (child for child in page_obj.children if child.status == "published"),
+            (child for child in page_obj.children if child.is_published),
             key=lambda child: (child.sort_order, child.title),
         )
 
@@ -95,7 +95,7 @@ async def get_pages_tree(db: AsyncSession = Depends(get_db)):
             id=page_obj.id,
             slug=page_obj.slug,
             title=page_obj.title,
-            status=page_obj.status,
+            is_published=page_obj.is_published,
             sort_order=page_obj.sort_order,
             parent_id=page_obj.parent_id,
             page_type=page_obj.page_type,
@@ -104,7 +104,7 @@ async def get_pages_tree(db: AsyncSession = Depends(get_db)):
                     id=child.id,
                     slug=child.slug,
                     title=child.title,
-                    status=child.status,
+                    is_published=child.is_published,
                     sort_order=child.sort_order,
                     parent_id=child.parent_id,
                     page_type=child.page_type,
@@ -131,7 +131,7 @@ async def get_page(slug: str, db: AsyncSession = Depends(get_db)):
         )
         .where(
             Page.slug == slug,
-            Page.status == "published",
+            Page.is_published.is_(True),
         )
     )
 
@@ -164,10 +164,9 @@ async def get_page(slug: str, db: AsyncSession = Depends(get_db)):
     ]
 
     page_out = PageOut.model_validate(page_obj)
-    return page_out.model_copy(update={"menu_parent_labels": menu_parent_labels})
-
-
-
-
-
-
+    return page_out.model_copy(
+        update={
+            "menu_parent_labels": menu_parent_labels,
+            "children": [child for child in page_out.children if child.is_published],
+        }
+    )

@@ -69,7 +69,7 @@ class ProductBase(BaseModel):
     short_description: Optional[str] = None
     description: Optional[str] = None
     membrane_material: Optional[str] = None
-    status: str = "published"
+    is_published: bool = True
     seo_title: Optional[str] = None
     seo_description: Optional[str] = None
 
@@ -83,7 +83,7 @@ class ProductUpdate(BaseModel):
     short_description: Optional[str] = None
     description: Optional[str] = None
     membrane_material: Optional[str] = None
-    status: Optional[str] = None
+    is_published: Optional[bool] = None
     seo_title: Optional[str] = None
     seo_description: Optional[str] = None
     category_id: Optional[int] = None
@@ -95,7 +95,7 @@ class ProductListItem(BaseModel):
     slug: str
     name: str
     short_description: Optional[str] = None
-    status: str
+    is_published: bool
     category: Optional[ProductCategoryOut] = None
     images: list[ProductImageOut] = Field(default_factory=list)
 

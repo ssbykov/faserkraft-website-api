@@ -7,6 +7,7 @@ from typing import Optional
 
 from sqlalchemy import ForeignKey, Text, Boolean, Integer, String, DateTime, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.sql import expression
 
 from app.db.session import Base
 
@@ -39,7 +40,13 @@ class Product(Base):
     short_description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     membrane_material: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    status: Mapped[str] = mapped_column(String(50), default="published")
+    is_published: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
+        server_default=expression.true(),
+        nullable=False,
+        index=True,
+    )
     seo_title: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     seo_description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
