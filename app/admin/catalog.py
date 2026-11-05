@@ -14,6 +14,7 @@ from app.models import (
     ProductSpecification,
     SpecificationGroup,
     SpecificationParameter,
+    ProductCardField,
 )
 
 
@@ -95,24 +96,27 @@ class SpecificationParameterAdmin(ModelView, model=SpecificationParameter):
         SpecificationParameter.name,
         SpecificationParameter.code,
         SpecificationParameter.sort_order,
+        SpecificationParameter.is_filterable,
+        SpecificationParameter.list_sort_order,
     ]
-    column_searchable_list = [SpecificationParameter.name, SpecificationParameter.code]
     column_sortable_list = [
         SpecificationParameter.id,
         SpecificationParameter.sort_order,
+        SpecificationParameter.list_sort_order,
     ]
     column_filters = [
         ForeignKeyFilter(
-            SpecificationParameter.group_id,
-            SpecificationGroup.name,
-            title="Группа",
+            SpecificationParameter.group_id, SpecificationGroup.name, title="Группа"
         ),
+        BooleanFilter(SpecificationParameter.is_filterable, title="Фильтр в списке"),
     ]
     form_columns = [
         SpecificationParameter.group,
         SpecificationParameter.name,
         SpecificationParameter.code,
         SpecificationParameter.sort_order,
+        SpecificationParameter.is_filterable,
+        SpecificationParameter.list_sort_order,
     ]
 
 
@@ -188,6 +192,31 @@ class ProductDocumentAdmin(ModelView, model=ProductDocument):
     ]
 
 
+class ProductCardFieldAdmin(ModelView, model=ProductCardField):
+    name = "Поле карточки"
+    name_plural = "Поля карточки"
+    icon = "fa-solid fa-id-card"
+    column_list = [
+        ProductCardField.id,
+        ProductCardField.key,
+        ProductCardField.label,
+        ProductCardField.parameter,
+        ProductCardField.sort_order,
+        ProductCardField.is_active,
+    ]
+    column_sortable_list = [ProductCardField.sort_order, ProductCardField.key]
+    form_columns = [
+        ProductCardField.key,
+        ProductCardField.label,
+        ProductCardField.parameter,
+        ProductCardField.sort_order,
+        ProductCardField.is_active,
+    ]
+    form_ajax_refs = {
+        "parameter": {"fields": ("name",), "order_by": "name"},
+    }
+
+
 CATALOG_VIEWS = [
     ProductCategoryAdmin,
     ProductAdmin,
@@ -196,4 +225,5 @@ CATALOG_VIEWS = [
     ProductSpecificationAdmin,
     ProductImageAdmin,
     ProductDocumentAdmin,
+    ProductCardFieldAdmin,
 ]

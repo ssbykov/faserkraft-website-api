@@ -1,177 +1,252 @@
 """
 app/api/v1/products.py
-Публичные и административные эндпоинты каталога продукции
+Публичные эндпоинты каталога продукции
 """
+
 import re
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select, distinct
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from sqlalchemy import Numeric, cast, exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import contains_eager, selectinload
 
 from app.db.session import get_db
 from app.models import (
     Product,
     ProductCategory,
     ProductSpecification,
+    SpecificationGroup,
     SpecificationParameter,
+    ProductCardField,
 )
-from app.schemas.products import ProductFiltersResponse, FilterOption
-from app.schemas.schemas import (
-    ProductListItem,
-    ProductOut,
+from app.schemas.products import (
+    FilterGroup,
+    FilterOption,
+    ProductFiltersResponse,
+    CardValue,
 )
+from app.schemas.schemas import ProductListItem, ProductOut
 
 router = APIRouter(prefix="/products", tags=["products"])
 
+FILTER_PREFIX = "f_"
+LEADING_NUMBER = re.compile(r"\s*(\d+(?:[.,]\d+)?)")
 
-def specs_with_parameter(name_pattern: str):
-    """Характеристики, у которых название параметра подходит под шаблон."""
+
+def parse_spec_filters(request: Request) -> dict[int, str]:
+    """?f_12=ПС&f_13=3 -> {12: 'ПС', 13: '3'}"""
+    result: dict[int, str] = {}
+    for key, value in request.query_params.items():
+        suffix = key[len(FILTER_PREFIX) :]
+        if key.startswith(FILTER_PREFIX) and suffix.isdigit() and value.strip():
+            result[int(suffix)] = value.strip()
+    return result
+
+
+def spec_exists(parameter_id: int, value: str):
+    """EXISTS: у товара параметр имеет точно такое значение."""
     return (
-        select(ProductSpecification)
-        .join(
-            SpecificationParameter,
-            SpecificationParameter.id == ProductSpecification.parameter_id,
+        exists()
+        .where(
+            ProductSpecification.product_id == Product.id,
+            ProductSpecification.parameter_id == parameter_id,
+            func.trim(ProductSpecification.value) == value,
         )
-        .where(SpecificationParameter.name.ilike(name_pattern))
+        .correlate(Product)
     )
 
 
-def product_ids_by_spec(name_pattern: str, value_pattern: str):
-    subq = specs_with_parameter(name_pattern).where(
-        ProductSpecification.value.ilike(value_pattern)
-    )
-    return select(subq.subquery().c.product_id)
-
-
-def material_condition(material: str):
-    return (
-        (Product.membrane_material.ilike(f"%{material}%"))
-        | (Product.name.ilike(f"%{material}%"))
-        | (Product.slug.ilike(f"%{material}%"))
-        | Product.id.in_(product_ids_by_spec("%материал%", f"%{material}%"))
-    )
-
-
-def clean_area_number(area: str) -> str:
-    """Оставляет только число: '8.0 м²' -> '8.0'."""
-    return re.sub(r"[^\d.,]", "", area).replace(",", ".")
-
-
-def area_condition(area: str):
-    clean_num = clean_area_number(area)
-    return (
-        (Product.slug.ilike(f"%-{clean_num}-%"))
-        | (Product.slug.ilike(f"%-{clean_num}p-%"))
-        | (Product.name.ilike(f"%-{clean_num}-%"))
-        | (Product.name.ilike(f"% {clean_num} м²%"))
-        | Product.id.in_(product_ids_by_spec("%площадь%", f"%{clean_num}%"))
-    )
-
-
-def published_product_ids(category_slug: Optional[str]):
+def filtered_product_ids(
+    category_slug: Optional[str],
+    spec_filters: dict[int, str],
+    exclude_parameter_id: Optional[int] = None,
+):
     stmt = select(Product.id).where(Product.is_published.is_(True))
     if category_slug:
-        stmt = stmt.join(Product.category).where(
-            ProductCategory.slug == category_slug
-        )
+        stmt = stmt.join(Product.category).where(ProductCategory.slug == category_slug)
+    for parameter_id, value in spec_filters.items():
+        if parameter_id != exclude_parameter_id:
+            stmt = stmt.where(spec_exists(parameter_id, value))
     return stmt
 
 
-async def distinct_spec_values(
-    db: AsyncSession, product_ids, name_pattern: str
+async def distinct_values(
+    db: AsyncSession, product_ids, parameter_id: int
 ) -> list[str]:
+    value = func.trim(ProductSpecification.value)
     stmt = (
-        select(distinct(ProductSpecification.value))
-        .join(
-            SpecificationParameter,
-            SpecificationParameter.id == ProductSpecification.parameter_id,
-        )
+        select(value)
         .where(
+            ProductSpecification.parameter_id == parameter_id,
             ProductSpecification.product_id.in_(product_ids),
-            SpecificationParameter.name.ilike(name_pattern),
-            ProductSpecification.value.is_not(None),
-            ProductSpecification.value != "",
+            value != "",
         )
+        .distinct()
     )
     result = await db.execute(stmt)
-    return [value.strip() for value in result.scalars().all() if value and value.strip()]
+    return list(result.scalars().all())
 
 
-def parse_area_num(val: str) -> float:
-    nums = re.findall(r"\d+(?:[.,]\d+)?", val)
-    return float(nums[0].replace(",", ".")) if nums else 0.0
+def natural_key(value: str):
+    """Сначала значения с числом (по числу), затем текстовые."""
+    match = LEADING_NUMBER.match(value)
+    if match:
+        return (0, float(match.group(1).replace(",", ".")), value.lower())
+    return (1, 0.0, value.lower())
+
+
+async def get_sort_parameter_ids(db: AsyncSession) -> list[int]:
+    stmt = (
+        select(SpecificationParameter.id)
+        .where(SpecificationParameter.list_sort_order.is_not(None))
+        .order_by(SpecificationParameter.list_sort_order, SpecificationParameter.id)
+    )
+    return list((await db.execute(stmt)).scalars().all())
+
+
+def sort_expressions(parameter_id: int):
+    """Число из начала значения, затем текст; пустые значения в конец."""
+    value = (
+        select(func.trim(ProductSpecification.value))
+        .where(
+            ProductSpecification.product_id == Product.id,
+            ProductSpecification.parameter_id == parameter_id,
+        )
+        .correlate(Product)
+        .scalar_subquery()
+    )
+    first_number = func.substring(value, r"^\s*(\d+([.,]\d+)?)")
+    number = cast(func.replace(first_number, ",", "."), Numeric)
+    return [number.asc().nulls_last(), func.lower(value).asc().nulls_last()]
+
+
+async def get_card_fields(db: AsyncSession) -> list[ProductCardField]:
+    stmt = (
+        select(ProductCardField)
+        .where(ProductCardField.is_active.is_(True))
+        .order_by(ProductCardField.sort_order, ProductCardField.id)
+    )
+    return list((await db.execute(stmt)).scalars().all())
+
+
+def build_card(product: Product, fields: list[ProductCardField]) -> list[CardValue]:
+    if not fields:
+        return []
+    values = {s.parameter_id: (s.value or "").strip() for s in product.specifications}
+    card = []
+    for field in fields:
+        value = values.get(field.parameter_id)
+        if value:
+            card.append(
+                CardValue(
+                    key=field.key,
+                    label=field.label or field.parameter.name,
+                    value=value,
+                )
+            )
+    return card
 
 
 @router.get("", response_model=list[ProductListItem])
 async def list_products(
+    request: Request,
     category_slug: Optional[str] = Query(
         default=None, description="Фильтр по slug категории"
     ),
-    material: Optional[str] = Query(
-        default=None, description="Фильтр по материалу"
-    ),
-    area: Optional[str] = Query(default=None, description="Фильтр по площади"),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=50, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
 ):
+    spec_filters = parse_spec_filters(request)
+    card_fields = await get_card_fields(db)
+
+    options = [contains_eager(Product.category), selectinload(Product.images)]
+    if card_fields:
+        # Грузим только характеристики, которые нужны карточке
+        options.append(
+            selectinload(
+                Product.specifications.and_(
+                    ProductSpecification.parameter_id.in_(
+                        list({f.parameter_id for f in card_fields})
+                    )
+                )
+            )
+        )
+
+    order_by = [
+        ProductCategory.sort_order.asc().nulls_last(),
+        ProductCategory.name.asc().nulls_last(),
+    ]
+    for parameter_id in await get_sort_parameter_ids(db):
+        order_by.extend(sort_expressions(parameter_id))
+    order_by.extend([Product.name, Product.id])
+
     stmt = (
         select(Product)
-        .options(
-            selectinload(Product.category),
-            selectinload(Product.images),
-        )
+        .outerjoin(Product.category)
+        .options(*options)
         .where(Product.is_published.is_(True))
-        .order_by(Product.name)
+        .order_by(*order_by)
     )
 
     if category_slug:
-        stmt = stmt.join(Product.category).where(
-            ProductCategory.slug == category_slug
-        )
-
-    if material:
-        stmt = stmt.where(material_condition(material))
-
-    if area:
-        stmt = stmt.where(area_condition(area))
+        stmt = stmt.where(ProductCategory.slug == category_slug)
+    for parameter_id, value in spec_filters.items():
+        stmt = stmt.where(spec_exists(parameter_id, value))
 
     stmt = stmt.offset((page - 1) * page_size).limit(page_size)
     result = await db.execute(stmt)
-    return result.scalars().unique().all()
+
+    items = []
+    for product in result.scalars().unique().all():
+        item = ProductListItem.model_validate(product)
+        item.card = build_card(product, card_fields)
+        items.append(item)
+    return items
 
 
 @router.get("/filters", response_model=ProductFiltersResponse)
 async def get_product_filters(
+    request: Request,
     category_slug: Optional[str] = Query(default=None),
-    material: Optional[str] = Query(default=None),
-    area: Optional[str] = Query(default=None),
     db: AsyncSession = Depends(get_db),
 ):
-    """Возвращает контекстно-зависимые опции фильтрации (материалы и площади) из базы данных."""
+    """Фильтры по параметрам с is_filterable=true; опции учитывают остальные фильтры."""
+    spec_filters = parse_spec_filters(request)
 
-    # Материалы: с учётом выбранной категории и площади
-    base_for_materials = published_product_ids(category_slug)
-    if area:
-        base_for_materials = base_for_materials.where(area_condition(area))
+    params_stmt = (
+        select(SpecificationParameter.id, SpecificationParameter.name)
+        .join(
+            SpecificationGroup, SpecificationGroup.id == SpecificationParameter.group_id
+        )
+        .where(SpecificationParameter.is_filterable.is_(True))
+        .order_by(
+            SpecificationGroup.sort_order,
+            SpecificationParameter.sort_order,
+            SpecificationParameter.id,
+        )
+    )
+    params = (await db.execute(params_stmt)).all()
 
-    raw_materials = await distinct_spec_values(db, base_for_materials, "%материал%")
-    materials = [FilterOption(label=m, value=m) for m in sorted(set(raw_materials))]
-
-    # Площади: с учётом выбранной категории и материала
-    base_for_areas = published_product_ids(category_slug)
-    if material:
-        base_for_areas = base_for_areas.where(material_condition(material))
-
-    raw_areas = await distinct_spec_values(db, base_for_areas, "%площадь%")
-    areas = [
-        FilterOption(label=a, value=a)
-        for a in sorted(set(raw_areas), key=parse_area_num)
-    ]
-
-    return ProductFiltersResponse(materials=materials, areas=areas)
+    groups: list[FilterGroup] = []
+    for parameter_id, name in params:
+        base = filtered_product_ids(
+            category_slug, spec_filters, exclude_parameter_id=parameter_id
+        )
+        values = await distinct_values(db, base, parameter_id)
+        if values:
+            groups.append(
+                FilterGroup(
+                    id=parameter_id,
+                    name=name,
+                    options=[
+                        FilterOption(label=v, value=v)
+                        for v in sorted(set(values), key=natural_key)
+                    ],
+                )
+            )
+    return ProductFiltersResponse(filters=groups)
 
 
 @router.get("/{slug}", response_model=ProductOut)

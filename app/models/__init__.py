@@ -11,6 +11,7 @@ from app.models.catalog import (
     ProductSpecification,
     SpecificationGroup,
     SpecificationParameter,
+    ProductCardField,
 )
 from app.models.homepage import HomepageCard, HomepageSection
 from app.models.leads import LeadRequest
@@ -28,6 +29,7 @@ __all__ = [
     "ProductSpecification",
     "SpecificationGroup",
     "SpecificationParameter",
+    "ProductCardField",
     "Page",
     "PageImage",
     "PageDocument",

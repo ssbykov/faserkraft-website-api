@@ -126,6 +126,14 @@ class SpecificationParameter(Base):
     name: Mapped[str] = mapped_column(String(500), nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
 
+    is_filterable: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        server_default=expression.false(),
+        nullable=False,
+    )
+    list_sort_order: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
     group: Mapped["SpecificationGroup"] = relationship(
         back_populates="parameters",
         lazy="joined",
@@ -135,6 +143,32 @@ class SpecificationParameter(Base):
     def __repr__(self) -> str:
         return self.name
 
+class ProductCardField(Base):
+    """Поле карточки товара в списке: ключ для фронтенда + параметр-источник."""
+
+    __tablename__ = "product_card_fields"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    key: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
+    label: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    parameter_id: Mapped[int] = mapped_column(
+        ForeignKey("specification_parameters.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    sort_order: Mapped[int] = mapped_column(
+        Integer, default=0, server_default="0", nullable=False
+    )
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default=expression.true(), nullable=False
+    )
+
+    parameter: Mapped["SpecificationParameter"] = relationship(
+        lazy="joined", innerjoin=True
+    )
+
+    def __repr__(self) -> str:
+        return self.key
 
 class ProductSpecification(Base):
     __tablename__ = "product_specifications"

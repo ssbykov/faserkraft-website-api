@@ -87,6 +87,10 @@ class ProductUpdate(BaseModel):
     seo_description: Optional[str] = None
     category_id: Optional[int] = None
 
+class CardValue(BaseModel):
+    key: str
+    label: str
+    value: str
 
 class ProductListItem(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -97,6 +101,7 @@ class ProductListItem(BaseModel):
     is_published: bool
     category: Optional[ProductCategoryOut] = None
     images: list[ProductImageOut] = Field(default_factory=list)
+    card: list[CardValue] = Field(default_factory=list)
 
 
 class ProductOut(ProductBase):
@@ -119,6 +124,11 @@ class FilterOption(BaseModel):
     value: str
 
 
+class FilterGroup(BaseModel):
+    id: int
+    name: str
+    options: list[FilterOption]
+
+
 class ProductFiltersResponse(BaseModel):
-    materials: list[FilterOption]
-    areas: list[FilterOption]
+    filters: list[FilterGroup]
