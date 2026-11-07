@@ -159,7 +159,7 @@ async def list_products(
     db: AsyncSession = Depends(get_db),
 ):
     spec_filters = parse_spec_filters(request)
-    card_fields = await get_card_fields(db)
+    card_fields = await get_card_fields(db)  # активные, по sort_order
 
     options = [contains_eager(Product.category), selectinload(Product.images)]
     if card_fields:
@@ -174,13 +174,14 @@ async def list_products(
             )
         )
 
-    order_by = [
-        ProductCategory.sort_order.asc().nulls_last(),
-        ProductCategory.name.asc().nulls_last(),
-    ]
-    for parameter_id in await get_sort_parameter_ids(db):
-        order_by.extend(sort_expressions(parameter_id))
-    order_by.extend([Product.name, Product.id])
+    # Сортировка только по параметрам полей карточки, в порядке sort_order полей
+    order_by = []
+    seen_parameter_ids: set[int] = set()
+    for field in card_fields:
+        if field.parameter_id not in seen_parameter_ids:
+            seen_parameter_ids.add(field.parameter_id)
+            order_by.extend(sort_expressions(field.parameter_id))
+    order_by.append(Product.id)  # стабильный порядок между страницами
 
     stmt = (
         select(Product)
