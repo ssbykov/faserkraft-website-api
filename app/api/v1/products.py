@@ -96,15 +96,6 @@ def natural_key(value: str):
     return (1, 0.0, value.lower())
 
 
-async def get_sort_parameter_ids(db: AsyncSession) -> list[int]:
-    stmt = (
-        select(SpecificationParameter.id)
-        .where(SpecificationParameter.list_sort_order.is_not(None))
-        .order_by(SpecificationParameter.list_sort_order, SpecificationParameter.id)
-    )
-    return list((await db.execute(stmt)).scalars().all())
-
-
 def sort_expressions(parameter_id: int):
     """Число из начала значения, затем текст; пустые значения в конец."""
     value = (

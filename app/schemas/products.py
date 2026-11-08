@@ -2,10 +2,12 @@
 app/schemas/products.py
 Pydantic v2 схемы каталога продукции.
 """
+
 from datetime import datetime
 from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+
 
 class ProductCategoryBase(BaseModel):
     slug: str
@@ -42,6 +44,8 @@ class ProductSpecificationOut(ProductSpecificationBase):
 
 class ProductImageBase(BaseModel):
     image_url: str
+    alt_text: Optional[str] = None
+    kind: str = "gallery"
     sort_order: int = 0
 
 
@@ -87,10 +91,12 @@ class ProductUpdate(BaseModel):
     seo_description: Optional[str] = None
     category_id: Optional[int] = None
 
+
 class CardValue(BaseModel):
     key: str
     label: str
     value: str
+
 
 class ProductListItem(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -113,6 +119,7 @@ class ProductOut(ProductBase):
     specifications: list[ProductSpecificationOut] = Field(default_factory=list)
     images: list[ProductImageOut] = Field(default_factory=list)
     documents: list[ProductDocumentOut] = Field(default_factory=list)
+
     @field_validator("specifications", mode="after")
     @classmethod
     def sort_specifications(cls, value):
