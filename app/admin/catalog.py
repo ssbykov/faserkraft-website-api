@@ -193,6 +193,15 @@ class MediaAssetAdmin(ModelView, model=MediaAsset):
         MediaAsset.id,
         MediaAsset.file_url,
         MediaAsset.title,
+        "shortcode",
+        MediaAsset.alt_text,
+        MediaAsset.created_at,
+    ]
+    column_details_list = [
+        MediaAsset.id,
+        MediaAsset.file_url,
+        MediaAsset.title,
+        "shortcode",
         MediaAsset.alt_text,
         MediaAsset.created_at,
     ]
@@ -201,14 +210,16 @@ class MediaAssetAdmin(ModelView, model=MediaAsset):
         MediaAsset.title: "Название",
         MediaAsset.alt_text: "Alt-текст",
         MediaAsset.created_at: "Загружен",
+        "shortcode": "Шорткод",
     }
-    column_formatters = {MediaAsset.file_url: lambda m, a: _thumb(m.file_url)}
-    column_formatters_detail = {MediaAsset.file_url: lambda m, a: _thumb(m.file_url)}
-    column_searchable_list = [
-        MediaAsset.title,
-        MediaAsset.alt_text,
-        MediaAsset.file_url,
-    ]
+    column_formatters = {
+        MediaAsset.file_url: lambda m, a: _thumb(m.file_url),
+        "shortcode": lambda m, a: Markup(
+            '<code style="cursor:pointer" title="Нажмите, чтобы скопировать" '
+            'onclick="navigator.clipboard.writeText(this.textContent)">'
+        ) + escape(m.shortcode) + Markup("</code>"),
+    }
+    column_formatters_detail = column_formatters
     column_sortable_list = [MediaAsset.id, MediaAsset.created_at]
     column_default_sort = [(MediaAsset.id, True)]
 

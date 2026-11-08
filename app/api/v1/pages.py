@@ -17,6 +17,7 @@ from app.schemas.pages import (
     PageOut,
     PageTreeItem,
 )
+from app.services.shortcodes import db_asset_loader, expand_media_shortcodes
 
 router = APIRouter(prefix="/pages", tags=["pages"])
 
@@ -164,8 +165,10 @@ async def get_page(slug: str, db: AsyncSession = Depends(get_db)):
     ]
 
     page_out = PageOut.model_validate(page_obj)
+    content = await expand_media_shortcodes(page_out.content, db_asset_loader(db))
     return page_out.model_copy(
         update={
+            "content": content,
             "menu_parent_labels": menu_parent_labels,
             "children": [child for child in page_out.children if child.is_published],
         }

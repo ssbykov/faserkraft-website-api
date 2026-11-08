@@ -27,6 +27,7 @@ from app.schemas.products import (
     CardValue,
 )
 from app.schemas.schemas import ProductListItem, ProductOut
+from app.services.shortcodes import db_asset_loader, expand_media_shortcodes
 
 router = APIRouter(prefix="/products", tags=["products"])
 
@@ -261,4 +262,8 @@ async def get_product(slug: str, db: AsyncSession = Depends(get_db)):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Продукт не найден"
         )
-    return product
+    product_out = ProductOut.model_validate(product)
+    description = await expand_media_shortcodes(
+        product_out.description, db_asset_loader(db)
+    )
+    return product_out.model_copy(update={"description": description})

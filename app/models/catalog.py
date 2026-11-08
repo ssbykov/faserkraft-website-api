@@ -242,6 +242,10 @@ class MediaAsset(Base):
     def __repr__(self) -> str:
         return self.title or self.file_url.rsplit("/", 1)[-1]
 
+    @property
+    def shortcode(self) -> str:
+        return "{{media:%d}}" % self.id
+
 
 class ProductImage(Base):
     """Привязка файла к товару: назначение (kind) и порядок."""
