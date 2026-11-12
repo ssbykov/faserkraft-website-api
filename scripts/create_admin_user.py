@@ -1,10 +1,12 @@
 """
 scripts/create_admin_user.py
 Создание первого администратора для входа в /admin
-Запуск: python -m scripts.create_admin_user
+Интерактивно: python -m scripts.create_admin_user
+Из CI:        printf 'email\npassword\n' | python -m scripts.create_admin_user --stdin
 """
 import asyncio
 import getpass
+import sys
 
 from sqlalchemy import select
 
@@ -13,7 +15,37 @@ from app.db.session import AsyncSessionLocal
 from app.models import User
 
 
+async def create_from_stdin() -> None:
+    lines = sys.stdin.read().split("\n")
+    email = lines[0].strip().lower() if lines else ""
+    password = lines[1] if len(lines) > 1 else ""
+
+    if not email or len(password) < 8:
+        print("ADMIN_EMAIL пустой или пароль короче 8 символов. Пропускаю.")
+        return
+
+    async with AsyncSessionLocal() as session:
+        existing = await session.execute(select(User).where(User.email == email))
+        if existing.scalar_one_or_none() is not None:
+            print(f"Администратор {email} уже существует. Пропускаю.")
+            return
+        session.add(
+            User(
+                email=email,
+                hashed_password=hash_password(password),
+                role="admin",
+                is_active=True,
+            )
+        )
+        await session.commit()
+        print(f"Создан администратор: {email}")
+
+
 async def main() -> None:
+    if "--stdin" in sys.argv:
+        await create_from_stdin()
+        return
+
     email = input("Email администратора: ").strip().lower()
     full_name = input("Полное имя (необязательно): ").strip() or None
     password = getpass.getpass("Пароль: ")

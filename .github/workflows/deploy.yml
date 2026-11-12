@@ -64,6 +64,8 @@ jobs:
           SECRET_KEY: ${{ secrets.SECRET_KEY }}
           CORS_ORIGINS: ${{ secrets.CORS_ORIGINS }}
           FRONTEND_REVALIDATE_SECRET: ${{ secrets.FRONTEND_REVALIDATE_SECRET }}
+          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
         run: |
           PORT="${VPS_SSH_PORT:-22}"
           SSH="ssh -p $PORT ${VPS_USER}@${VPS_HOST}"
@@ -94,4 +96,8 @@ jobs:
             docker compose -f docker-compose.prod.yml up -d --build &&
             docker compose -f docker-compose.prod.yml run --rm -T api alembic upgrade head &&
             docker image prune -f
+          '
+          printf '%s\n%s\n' "$ADMIN_EMAIL" "$ADMIN_PASSWORD" | $SSH '
+            cd ~/faserkraft-website-api &&
+            docker compose -f docker-compose.prod.yml run --rm -T api python -m scripts.create_admin_user --stdin
           '
