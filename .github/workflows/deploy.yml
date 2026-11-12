@@ -60,13 +60,36 @@ jobs:
           VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_USER: ${{ secrets.VPS_USER }}
           VPS_SSH_PORT: ${{ secrets.VPS_SSH_PORT }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
+          CORS_ORIGINS: ${{ secrets.CORS_ORIGINS }}
+          FRONTEND_REVALIDATE_SECRET: ${{ secrets.FRONTEND_REVALIDATE_SECRET }}
         run: |
           PORT="${VPS_SSH_PORT:-22}"
+          SSH="ssh -p $PORT ${VPS_USER}@${VPS_HOST}"
+
           rsync -az --delete \
             -e "ssh -p $PORT" \
             --exclude '.git' --exclude '.env' --exclude 'media' --exclude 'backups' \
             ./ "${VPS_USER}@${VPS_HOST}:faserkraft-website-api/"
-          ssh -p "$PORT" "${VPS_USER}@${VPS_HOST}" '
+
+          $SSH 'umask 077; cat > ~/faserkraft-website-api/.env' <<EOF
+          PROJECT_NAME=Faserkraft Website API
+          ENVIRONMENT=production
+          POSTGRES_HOST=db
+          POSTGRES_PORT=5432
+          POSTGRES_USER=postgres
+          POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+          POSTGRES_DB=fk_web
+          SECRET_KEY=${SECRET_KEY}
+          ADMIN_SESSION_MAX_AGE_SECONDS=28800
+          CORS_ORIGINS=${CORS_ORIGINS}
+          TRUST_PROXY=true
+          FRONTEND_REVALIDATE_URL=http://127.0.0.1:3000/api/revalidate/homepage
+          FRONTEND_REVALIDATE_SECRET=${FRONTEND_REVALIDATE_SECRET}
+          EOF
+
+          $SSH '
             cd ~/faserkraft-website-api &&
             docker compose -f docker-compose.prod.yml up -d --build &&
             docker compose -f docker-compose.prod.yml run --rm -T api alembic upgrade head &&
