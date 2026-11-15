@@ -16,7 +16,6 @@ concurrency:
 jobs:
   checks:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -38,7 +37,6 @@ jobs:
   deploy:
     needs: checks
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -66,6 +64,10 @@ jobs:
           FRONTEND_REVALIDATE_SECRET: ${{ secrets.FRONTEND_REVALIDATE_SECRET }}
           ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
           ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+          YANDEX_DISK_CLIENT_ID: ${{ secrets.YANDEX_DISK_CLIENT_ID }}
+          YANDEX_DISK_CLIENT_SECRET: ${{ secrets.YANDEX_DISK_CLIENT_SECRET }}
+          YANDEX_DISK_REFRESH_TOKEN: ${{ secrets.YANDEX_DISK_REFRESH_TOKEN }}
+          LETSENCRYPT_EMAIL: ${{ secrets.LETSENCRYPT_EMAIL }}
         run: |
           PORT="${VPS_SSH_PORT:-22}"
           SSH="ssh -p $PORT ${VPS_USER}@${VPS_HOST}"
@@ -87,17 +89,20 @@ jobs:
           ADMIN_SESSION_MAX_AGE_SECONDS=28800
           CORS_ORIGINS=${CORS_ORIGINS}
           TRUST_PROXY=true
-          FRONTEND_REVALIDATE_URL=http://127.0.0.1:3000/api/revalidate/homepage
+          FRONTEND_REVALIDATE_URL=http://frontend:3000/api/revalidate/homepage
           FRONTEND_REVALIDATE_SECRET=${FRONTEND_REVALIDATE_SECRET}
           EOF
 
           $SSH '
             cd ~/faserkraft-website-api &&
-            docker compose -f docker-compose.prod.yml up -d --build &&
+            docker compose -f docker-compose.prod.yml up -d --build api db &&
             docker compose -f docker-compose.prod.yml run --rm -T api alembic upgrade head &&
             docker image prune -f
           '
+
           printf '%s\n%s\n' "$ADMIN_EMAIL" "$ADMIN_PASSWORD" | $SSH '
             cd ~/faserkraft-website-api &&
             docker compose -f docker-compose.prod.yml run --rm -T api python -m scripts.create_admin_user --stdin
           '
+
+          $SSH "bash ~/faserkraft-website-api/deploy/setup-nginx.sh test.faserkraft.ru '$LETSENCRYPT_EMAIL'"
