@@ -1,9 +1,9 @@
 """
 app/services/media.py
-Загрузка и проверка изображений товаров для админки.
+Загрузка и проверка изображений для админки (товары и страницы).
 
-Файлы сохраняются в media/products/ под случайным именем, в базе хранится
-путь вида /media/products/<uuid>.<ext>. Имя файла от пользователя не используется.
+Файлы сохраняются в media/images/ под случайным именем, в базе хранится
+путь вида /media/images/<uuid>.<ext>. Имя файла от пользователя не используется.
 """
 
 import re
@@ -16,8 +16,8 @@ import anyio
 
 # Та же папка, что монтируется как /media в app/main.py
 MEDIA_DIR = Path(__file__).resolve().parents[2] / "media"
-PRODUCTS_SUBDIR = "products"
-PRODUCTS_URL_PREFIX = f"/media/{PRODUCTS_SUBDIR}/"
+IMAGES_SUBDIR = "images"
+IMAGES_URL_PREFIX = f"/media/{IMAGES_SUBDIR}/"
 
 MAX_RASTER_BYTES = 5 * 1024 * 1024
 MAX_SVG_BYTES = 512 * 1024
@@ -220,13 +220,13 @@ def prepare_image(content: bytes) -> tuple[str, bytes]:
     raise MediaValidationError("Допустимы файлы JPG, PNG, WebP и SVG.")
 
 
-async def save_product_image(upload: Any) -> str:
-    """Принимает UploadFile, сохраняет файл и возвращает путь для image_url."""
+async def save_image(upload: Any) -> str:
+    """Принимает UploadFile, сохраняет файл и возвращает путь для file_url."""
     limit = max(MAX_RASTER_BYTES, MAX_SVG_BYTES) + 1
     content = await upload.read(limit)
     extension, safe_content = prepare_image(content)
 
-    target_dir = MEDIA_DIR / PRODUCTS_SUBDIR
+    target_dir = MEDIA_DIR / IMAGES_SUBDIR
     name = f"{uuid.uuid4().hex}{extension}"
     target = target_dir / name
 
@@ -235,19 +235,20 @@ async def save_product_image(upload: Any) -> str:
         target.write_bytes(safe_content)
 
     await anyio.to_thread.run_sync(write)
-    return f"{PRODUCTS_URL_PREFIX}{name}"
+    return f"{IMAGES_URL_PREFIX}{name}"
 
 
-def delete_product_image_file(image_url: str | None) -> None:
+def delete_image_file(image_url: str | None) -> None:
     """Удаляет файл, загруженный через админку. Чужие и внешние адреса не трогает."""
-    if not image_url or not image_url.startswith(PRODUCTS_URL_PREFIX):
+    if not image_url or not image_url.startswith(IMAGES_URL_PREFIX):
         return
 
-    name = image_url[len(PRODUCTS_URL_PREFIX) :]
+    name = image_url[len(IMAGES_URL_PREFIX) :]
     if not name or "/" in name or "\\" in name or name.startswith("."):
         return
 
-    path = (MEDIA_DIR / PRODUCTS_SUBDIR / name).resolve()
-    if path.parent != (MEDIA_DIR / PRODUCTS_SUBDIR).resolve():
+    base = (MEDIA_DIR / IMAGES_SUBDIR).resolve()
+    path = (base / name).resolve()
+    if path.parent != base:
         return
     path.unlink(missing_ok=True)

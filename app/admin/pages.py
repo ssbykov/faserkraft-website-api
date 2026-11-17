@@ -6,7 +6,7 @@ app/admin/pages.py
 from sqladmin import ModelView
 from sqladmin.filters import ForeignKeyFilter, BooleanFilter
 
-from app.models import Page, PageImage, PageType
+from app.models import Page, PageType
 
 
 class PageTypeAdmin(ModelView, model=PageType):
@@ -80,28 +80,7 @@ class PageAdmin(ModelView, model=Page):
     can_export = True
 
 
-class PageImageAdmin(ModelView, model=PageImage):
-    name = "Изображение страницы"
-    name_plural = "Изображения страниц"
-    icon = "fa-solid fa-image"
-    column_list = [
-        PageImage.id,
-        PageImage.page,
-        PageImage.image_url,
-        PageImage.is_cover,
-        PageImage.sort_order,
-    ]
-    form_columns = [
-        PageImage.page,
-        PageImage.image_url,
-        PageImage.alt_text,
-        PageImage.is_cover,
-        PageImage.sort_order,
-    ]
-
-
 PAGES_VIEWS = [
     PageTypeAdmin,
     PageAdmin,
-    PageImageAdmin,
 ]

@@ -15,7 +15,6 @@ from sqlalchemy import (
     DateTime,
     func,
     UniqueConstraint,
-    CheckConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import expression
@@ -83,10 +82,10 @@ class Product(Base):
     specifications: Mapped[list["ProductSpecification"]] = relationship(
         back_populates="product", cascade="all, delete-orphan"
     )
-    images: Mapped[list["ProductImage"]] = relationship(
+    images: Mapped[list["ContentImage"]] = relationship(
         back_populates="product",
         cascade="all, delete-orphan",
-        order_by="ProductImage.sort_order",
+        order_by="ContentImage.sort_order",
     )
     documents: Mapped[list["ProductDocument"]] = relationship(
         back_populates="product",
@@ -221,79 +220,6 @@ class ProductSpecification(Base):
         return self.parameter_name
 
 
-PRODUCT_IMAGE_KINDS = ("cover", "gallery", "drawing")
-
-
-class MediaAsset(Base):
-    """Файл библиотеки: один файл можно привязать ко многим товарам."""
-
-    __tablename__ = "media_assets"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    title: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    file_url: Mapped[str] = mapped_column(String(1000), unique=True, nullable=False)
-    alt_text: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
-
-    product_images: Mapped[list["ProductImage"]] = relationship(back_populates="asset")
-
-    def __repr__(self) -> str:
-        return self.title or self.file_url.rsplit("/", 1)[-1]
-
-    @property
-    def shortcode(self) -> str:
-        return "{{media:%d}}" % self.id
-
-
-class ProductImage(Base):
-    """Привязка файла к товару: назначение (kind) и порядок."""
-
-    __tablename__ = "product_images"
-    __table_args__ = (
-        CheckConstraint(
-            "kind IN ('cover', 'gallery', 'drawing')",
-            name="ck_product_images_kind",
-        ),
-        UniqueConstraint(
-            "product_id", "asset_id", name="uq_product_images_product_asset"
-        ),
-    )
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    product_id: Mapped[int] = mapped_column(
-        ForeignKey("products.id", ondelete="CASCADE"), nullable=False
-    )
-    asset_id: Mapped[int] = mapped_column(
-        ForeignKey("media_assets.id", ondelete="RESTRICT"),
-        nullable=False,
-        index=True,
-    )
-    kind: Mapped[str] = mapped_column(
-        String(20),
-        default="gallery",
-        server_default="gallery",
-        nullable=False,
-        index=True,
-    )
-    sort_order: Mapped[int] = mapped_column(Integer, default=0)
-
-    product: Mapped["Product"] = relationship(back_populates="images")
-    asset: Mapped["MediaAsset"] = relationship(
-        back_populates="product_images", lazy="joined", innerjoin=True
-    )
-
-    @property
-    def image_url(self) -> str:
-        return self.asset.file_url
-
-    @property
-    def alt_text(self) -> Optional[str]:
-        return self.asset.alt_text
-
-    def __repr__(self) -> str:
-        return self.asset.file_url if self.asset else f"ProductImage {self.id}"
 
 
 class ProductDocument(Base):

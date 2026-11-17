@@ -7,8 +7,6 @@ from app.models.catalog import (
     Product,
     ProductCategory,
     ProductDocument,
-    MediaAsset,
-    ProductImage,
     ProductSpecification,
     SpecificationGroup,
     SpecificationParameter,
@@ -16,8 +14,9 @@ from app.models.catalog import (
 )
 from app.models.homepage import HomepageCard, HomepageSection
 from app.models.leads import LeadRequest
+from app.models.media import MediaAsset, ContentImage
 from app.models.menus import Menu, MenuItem
-from app.models.pages import Page, PageDocument, PageImage, PageType
+from app.models.pages import Page, PageDocument, PageType
 from app.models.redirects import Redirect
 from app.models.users import User
 from app.models.yandex_token import YandexToken
@@ -26,14 +25,13 @@ __all__ = [
     "Product",
     "ProductCategory",
     "ProductDocument",
-    "ProductImage",
+    "ContentImage",
     "MediaAsset",
     "ProductSpecification",
     "SpecificationGroup",
     "SpecificationParameter",
     "ProductCardField",
     "Page",
-    "PageImage",
     "PageDocument",
     "PageType",
     "User",

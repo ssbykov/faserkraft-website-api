@@ -1,6 +1,6 @@
 """
 app/models/pages.py
-Модели контентных страниц сайта: типы страниц, страницы, изображения страниц
+Модели контентных страниц сайта: типы страниц, страницы
 """
 
 from datetime import datetime
@@ -11,6 +11,11 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import expression
 
 from app.db.session import Base
+
+from typing import TYPE_CHECKING, Optional
+
+if TYPE_CHECKING:
+    from app.models.media import ContentImage
 
 
 class PageType(Base):
@@ -82,10 +87,10 @@ class Page(Base):
     )
     children: Mapped[list["Page"]] = relationship(back_populates="parent")
     page_type: Mapped["PageType"] = relationship(back_populates="pages")
-    images: Mapped[list["PageImage"]] = relationship(
+    images: Mapped[list["ContentImage"]] = relationship(
         back_populates="page",
         cascade="all, delete-orphan",
-        order_by="PageImage.sort_order",
+        order_by="ContentImage.sort_order",
     )
     documents: Mapped[list["PageDocument"]] = relationship(
         back_populates="page",
@@ -96,20 +101,6 @@ class Page(Base):
     def __repr__(self) -> str:
         return self.title
 
-
-class PageImage(Base):
-    __tablename__ = "page_images"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    page_id: Mapped[int] = mapped_column(
-        ForeignKey("pages.id", ondelete="CASCADE"), nullable=False
-    )
-    image_url: Mapped[str] = mapped_column(String(1000), nullable=False)
-    alt_text: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    is_cover: Mapped[bool] = mapped_column(Boolean, default=False)
-    sort_order: Mapped[int] = mapped_column(Integer, default=0)
-
-    page: Mapped["Page"] = relationship(back_populates="images")
 
 
 class PageDocument(Base):

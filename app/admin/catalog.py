@@ -3,30 +3,29 @@ app/admin/catalog.py
 Регистрация моделей каталога товаров в SQLAdmin
 """
 
-from sqlalchemy import func, select
-
 from markupsafe import Markup, escape
 from sqladmin import ModelView
 from sqladmin.fields import FileField
 from sqladmin.filters import BooleanFilter, ForeignKeyFilter
-from sqlalchemy import func
+from sqlalchemy import func, select
 from wtforms import SelectField
 
-from app.models import MediaAsset
 from app.models import (
+    ContentImage,
+    MediaAsset,
+    Page,
     Product,
+    ProductCardField,
     ProductCategory,
     ProductDocument,
-    ProductImage,
     ProductSpecification,
     SpecificationGroup,
     SpecificationParameter,
-    ProductCardField,
 )
 from app.services.media import (
     MediaValidationError,
-    delete_product_image_file,
-    save_product_image,
+    delete_image_file,
+    save_image,
 )
 
 
@@ -166,8 +165,8 @@ class ProductSpecificationAdmin(ModelView, model=ProductSpecification):
     }
 
 
-PRODUCT_IMAGE_KIND_CHOICES = [
-    ("cover", "Обложка карточки в каталоге"),
+CONTENT_IMAGE_KIND_CHOICES = [
+    ("cover", "Обложка карточки или страницы"),
     ("gallery", "Фото в галерее"),
     ("drawing", "Чертёж"),
 ]
@@ -217,7 +216,9 @@ class MediaAssetAdmin(ModelView, model=MediaAsset):
         "shortcode": lambda m, a: Markup(
             '<code style="cursor:pointer" title="Нажмите, чтобы скопировать" '
             'onclick="navigator.clipboard.writeText(this.textContent)">'
-        ) + escape(m.shortcode) + Markup("</code>"),
+        )
+        + escape(m.shortcode)
+        + Markup("</code>"),
     }
     column_formatters_detail = column_formatters
     column_sortable_list = [MediaAsset.id, MediaAsset.created_at]
@@ -243,7 +244,7 @@ class MediaAssetAdmin(ModelView, model=MediaAsset):
             description=(
                 "JPG, PNG, WebP или SVG. При редактировании оставьте пустым, "
                 "чтобы сохранить текущий файл. Новый файл заменит изображение "
-                "у всех товаров, где оно используется."
+                "у всех товаров и страниц, где оно используется."
             ),
         )
         return form_class
@@ -258,7 +259,7 @@ class MediaAssetAdmin(ModelView, model=MediaAsset):
             return
 
         try:
-            data["file_url"] = await save_product_image(upload)
+            data["file_url"] = await save_image(upload)
         except MediaValidationError as exc:
             raise ValueError(str(exc)) from exc
 
@@ -272,20 +273,20 @@ class MediaAssetAdmin(ModelView, model=MediaAsset):
     async def after_model_change(self, data, model, is_created, request):
         old_url = getattr(request.state, "old_media_file_url", None)
         if old_url and old_url != model.file_url:
-            delete_product_image_file(old_url)
+            delete_image_file(old_url)
         request.state.old_media_file_url = None
 
     async def on_model_delete(self, model, request):
-        # Файл, который используется товарами, удалять нельзя
+        # Файл, который используется товарами или страницами, удалять нельзя
         async with self.session_maker() as session:
             used = await session.scalar(
                 select(func.count())
-                .select_from(ProductImage)
-                .where(ProductImage.asset_id == model.id)
+                .select_from(ContentImage)
+                .where(ContentImage.asset_id == model.id)
             )
         if used:
             raise ValueError(
-                f"Файл используется у товаров ({used}). "
+                f"Файл используется в товарах и страницах ({used}). "
                 "Сначала удалите привязки в разделе «Изображения»."
             )
 
@@ -295,74 +296,89 @@ class MediaAssetAdmin(ModelView, model=MediaAsset):
 
     async def after_model_delete(self, model, request):
         for url in getattr(request.state, "media_files_to_delete", []):
-            delete_product_image_file(url)
+            delete_image_file(url)
         request.state.media_files_to_delete = []
 
 
-class ProductImageAdmin(ModelView, model=ProductImage):
-    name = "Изображение товара"
-    name_plural = "Изображения товаров"
+class ContentImageAdmin(ModelView, model=ContentImage):
+    name = "Изображение"
+    name_plural = "Изображения"
     icon = "fa-solid fa-image"
 
     column_list = [
-        ProductImage.id,
-        ProductImage.product,
-        ProductImage.asset,
-        ProductImage.kind,
-        ProductImage.sort_order,
+        ContentImage.id,
+        ContentImage.product,
+        ContentImage.page,
+        ContentImage.asset,
+        ContentImage.kind,
+        ContentImage.sort_order,
     ]
     column_labels = {
-        ProductImage.product: "Товар",
-        ProductImage.asset: "Файл",
-        ProductImage.kind: "Назначение",
-        ProductImage.sort_order: "Порядок",
+        ContentImage.product: "Товар",
+        ContentImage.page: "Страница",
+        ContentImage.asset: "Файл",
+        ContentImage.kind: "Назначение",
+        ContentImage.sort_order: "Порядок",
     }
     column_formatters = {
-        ProductImage.asset: lambda m, a: _thumb(m.asset.file_url)
+        ContentImage.asset: lambda m, a: _thumb(m.asset.file_url)
         + Markup(" ")
         + escape(repr(m.asset)),
     }
     column_default_sort = [
-        (ProductImage.product_id, False),
-        (ProductImage.sort_order, False),
+        (ContentImage.product_id, False),
+        (ContentImage.page_id, False),
+        (ContentImage.sort_order, False),
     ]
     column_sortable_list = [
-        ProductImage.id,
-        ProductImage.product_id,
-        ProductImage.sort_order,
+        ContentImage.id,
+        ContentImage.product_id,
+        ContentImage.page_id,
+        ContentImage.sort_order,
     ]
     column_filters = [
-        ForeignKeyFilter(ProductImage.product_id, Product.name, title="Товар"),
+        ForeignKeyFilter(ContentImage.product_id, Product.name, title="Товар"),
+        ForeignKeyFilter(ContentImage.page_id, Page.title, title="Страница"),
     ]
 
     form_columns = [
-        ProductImage.product,
-        ProductImage.asset,
-        ProductImage.kind,
-        ProductImage.sort_order,
+        ContentImage.product,
+        ContentImage.page,
+        ContentImage.asset,
+        ContentImage.kind,
+        ContentImage.sort_order,
     ]
     form_overrides = {"kind": SelectField}
     form_args = {
-        "product": {"label": "Товар"},
+        "product": {
+            "label": "Товар",
+            "description": "Укажите товар или страницу, но не оба сразу.",
+        },
+        "page": {"label": "Страница"},
         "asset": {
             "label": "Файл",
             "description": "Загрузите файл заранее в разделе «Медиафайлы».",
         },
         "kind": {
             "label": "Назначение",
-            "choices": PRODUCT_IMAGE_KIND_CHOICES,
+            "choices": CONTENT_IMAGE_KIND_CHOICES,
             "description": (
-                "Обложкой карточки в каталоге становится первое изображение "
-                "с назначением «Обложка» (по порядку), иначе первое фото из "
-                "галереи. Чертежи обложкой не бывают."
+                "Обложкой становится первое изображение с назначением «Обложка» "
+                "(по порядку), иначе первое фото из галереи. Чертежи обложкой "
+                "не бывают."
             ),
         },
         "sort_order": {"label": "Порядок", "description": "Меньше - выше."},
     }
     form_ajax_refs = {
         "product": {"fields": ("name", "slug"), "order_by": "name"},
+        "page": {"fields": ("title", "slug"), "order_by": "title"},
         "asset": {"fields": ("title", "alt_text", "file_url"), "order_by": "id"},
     }
+
+    async def on_model_change(self, data, model, is_created, request):
+        if bool(data.get("product")) == bool(data.get("page")):
+            raise ValueError("Укажите либо товар, либо страницу.")
 
 
 class ProductDocumentAdmin(ModelView, model=ProductDocument):
@@ -417,7 +433,7 @@ CATALOG_VIEWS = [
     SpecificationGroupAdmin,
     SpecificationParameterAdmin,
     ProductSpecificationAdmin,
-    ProductImageAdmin,
+    ContentImageAdmin,
     MediaAssetAdmin,
     ProductDocumentAdmin,
     ProductCardFieldAdmin,
