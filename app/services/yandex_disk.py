@@ -24,8 +24,8 @@ class YaDisk:
     API_URL = "https://cloud-api.yandex.net/v1/disk/resources"
     TOKEN_URL = "https://oauth.yandex.ru/token"
 
-    def __init__(self) -> None:
-        self.folder = settings.YANDEX_DISK_BACKUP_FOLDER.strip("/")
+    def __init__(self, folder: str | None = None) -> None:
+        self.folder = (folder or settings.YANDEX_DISK_BACKUP_FOLDER).strip("/")
 
     async def _request_new_tokens(
         self, session: aiohttp.ClientSession, refresh_token: str
@@ -209,3 +209,61 @@ class YaDisk:
             )
         if status not in (202, 204):
             raise YaDiskError(f"Не удалось удалить файл на Яндекс Диске, статус: {status}")
+
+    async def ensure_folder(self) -> None:
+        timeout = aiohttp.ClientTimeout(total=60)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            parts = self.folder.split("/")
+            for i in range(1, len(parts) + 1):
+                path = "/".join(parts[:i])
+                status, _ = await self._api(session, "PUT", self.API_URL, {"path": path})
+                if status not in (201, 409):
+                    raise YaDiskError(
+                        f"Не удалось создать папку на Яндекс.Диске, статус: {status}"
+                    )
+
+    async def list_files(self) -> dict[str, int]:
+        """Имена и размеры всех файлов папки (с постраничной выборкой)."""
+        result: dict[str, int] = {}
+        offset = 0
+        timeout = aiohttp.ClientTimeout(total=120)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            while True:
+                status, data = await self._api(
+                    session,
+                    "GET",
+                    self.API_URL,
+                    {
+                        "path": self.folder,
+                        "limit": 500,
+                        "offset": offset,
+                        "fields": "_embedded.items.name,_embedded.items.size,"
+                                  "_embedded.items.type,_embedded.total",
+                    },
+                )
+                if status == 404:
+                    return {}
+                if status != 200:
+                    raise YaDiskError(f"Не удалось получить список файлов, статус: {status}")
+                embedded = data.get("_embedded", {})
+                items = embedded.get("items", [])
+                for item in items:
+                    if item.get("type") == "file":
+                        result[item["name"]] = int(item.get("size", 0))
+                offset += len(items)
+                if not items or offset >= int(embedded.get("total", 0)):
+                    return result
+
+    async def upload_file(self, file_path: Path) -> None:
+        timeout = aiohttp.ClientTimeout(total=settings.YANDEX_DISK_TIMEOUT_SECONDS)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            upload_url = await self._get_upload_url(session, file_path.name)
+            with file_path.open("rb") as source:
+                async with session.put(upload_url, data=source) as response:
+                    if response.status not in (201, 202):
+                        raise YaDiskError(
+                            f"Ошибка загрузки {file_path.name}, статус: {response.status}"
+                        )
+
+    async def download_file(self, remote_name: str, dest: Path) -> None:
+        await self.download_backup(remote_name, dest)

@@ -28,7 +28,8 @@ class Settings(BaseSettings):
     YANDEX_DISK_CLIENT_ID: str = ""
     YANDEX_DISK_CLIENT_SECRET: str = ""
     YANDEX_DISK_REFRESH_TOKEN: str = ""
-    YANDEX_DISK_BACKUP_FOLDER: str = "faserkraft-db-backups"
+    YANDEX_DISK_BACKUP_FOLDER: str = "faserkraft-website-api/db-backups"
+    YANDEX_DISK_MEDIA_FOLDER: str = "faserkraft-website-api/media"
     YANDEX_DISK_TIMEOUT_SECONDS: int = 900
 
     SECRET_KEY: str = ""

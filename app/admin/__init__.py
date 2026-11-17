@@ -12,6 +12,7 @@ from app.admin.pages import PAGES_VIEWS
 from app.admin.redirects import REDIRECTS_VIEWS
 from app.admin.users import USERS_VIEWS
 from app.db.session import engine
+from app.admin.media_sync import MEDIA_VIEWS
 
 TEMPLATES_DIR = Path(__file__).resolve().parents[1] / "templates"
 
@@ -33,6 +34,7 @@ def setup_admin(app) -> Admin:
         *USERS_VIEWS,
         *MENUS_VIEWS,
         *HOMEPAGE_VIEWS,
+        *MEDIA_VIEWS,
     ]:
         admin.add_view(view)
 
