@@ -7,6 +7,7 @@ import re
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi.responses import Response
 from sqlalchemy import Numeric, cast, exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import contains_eager, selectinload
@@ -27,6 +28,7 @@ from app.schemas.products import (
     CardValue,
 )
 from app.schemas.schemas import ProductListItem, ProductOut
+from app.services.pdf_spec import render_product_spec_pdf
 from app.services.shortcodes import db_asset_loader, expand_media_shortcodes
 
 router = APIRouter(prefix="/products", tags=["products"])
@@ -267,3 +269,37 @@ async def get_product(slug: str, db: AsyncSession = Depends(get_db)):
         product_out.description, db_asset_loader(db)
     )
     return product_out.model_copy(update={"description": description})
+
+
+@router.get("/{slug}/spec-pdf")
+async def get_product_spec_pdf(slug: str, db: AsyncSession = Depends(get_db)):
+    stmt = (
+        select(Product)
+        .options(
+            selectinload(Product.category),
+            selectinload(Product.specifications)
+            .selectinload(ProductSpecification.parameter)
+            .selectinload(SpecificationParameter.group),
+            selectinload(Product.images),
+            selectinload(Product.documents),
+        )
+        .where(Product.slug == slug, Product.is_published.is_(True))
+    )
+    result = await db.execute(stmt)
+    product = result.scalar_one_or_none()
+    if not product:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Продукт не найден"
+        )
+
+    product_out = ProductOut.model_validate(product)
+    pdf_bytes = render_product_spec_pdf(product_out)
+    filename = f"{slug}-specification.pdf"
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+        },
+    )

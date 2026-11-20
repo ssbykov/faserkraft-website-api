@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <style>
+    @page { size: A4; margin: 18mm 15mm; }
+    body { font-family: "DejaVu Sans", sans-serif; font-size: 10pt; color: #0f172a; }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
+      border-bottom: 2px solid #0284c7;
+      padding-bottom: 12px;
+      margin-bottom: 16px;
+    }
+    .header-info { flex: 1; }
+    .logo { max-height: 42px; max-width: 150px; object-fit: contain; }
+    .brand { font-size: 9pt; color: #0284c7; text-transform: uppercase; letter-spacing: 1px; }
+    h1 { font-size: 16pt; margin: 4px 0 6px; }
+    .meta { font-size: 9pt; color: #475569; }
+    .desc { margin: 12px 0 18px; line-height: 1.4; color: #334155; }
+    h2 { font-size: 11pt; background: #f1f5f9; padding: 6px 10px; margin: 16px 0 0; border: 1px solid #cbd5e1; border-bottom: none; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+    td { border: 1px solid #cbd5e1; padding: 6px 10px; vertical-align: top; }
+    td.name { width: 55%; color: #334155; }
+    td.val { width: 45%; font-weight: bold; }
+    .footer { margin-top: 24px; font-size: 8pt; color: #64748b; border-top: 1px solid #e2e8f0; padding-top: 8px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="header-info">
+      <div class="brand">ООО «Фазеркрафт» — Техническая спецификация</div>
+      <h1>{{ product.name }}</h1>
+      <div class="meta">
+        {% if product.category %}Категория: {{ product.category.name }}{% endif %}
+        {% if product.membrane_material %} · Материал мембраны: {{ product.membrane_material }}{% endif %}
+      </div>
+    </div>
+    <img src="logo.png" alt="Faserkraft" class="logo">
+  </div>
+
+  {% if product.short_description %}
+    <p class="desc">{{ product.short_description }}</p>
+  {% endif %}
+
+  {% for group_name, specs in grouped_specs.items() %}
+    <h2>{{ group_name }}</h2>
+    <table>
+      <tbody>
+        {% for spec in specs %}
+          <tr>
+            <td class="name">{{ spec.parameter_name }}</td>
+            <td class="val">{{ spec.parameter_value or "—" }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endfor %}
+
+  <div class="footer">
+    Документ сформирован автоматически. Актуальные данные уточняйте в инженерном отделе Faserkraft.
+  </div>
+</body>
+</html>
