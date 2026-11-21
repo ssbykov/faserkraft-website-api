@@ -29,6 +29,7 @@ from app.schemas.products import (
     CardValue,
 )
 from app.schemas.schemas import ProductListItem, ProductOut
+from app.services.company import get_company
 from app.services.pdf_spec import render_product_spec_pdf
 from app.services.shortcodes import db_asset_loader, expand_media_shortcodes
 
@@ -294,7 +295,8 @@ async def get_product_spec_pdf(slug: str, db: AsyncSession = Depends(get_db)):
         )
 
     product_out = ProductOut.model_validate(product)
-    pdf_bytes = render_product_spec_pdf(product_out)
+    company = await get_company(db)
+    pdf_bytes = render_product_spec_pdf(product_out, company)
     filename = quote(f"{slug}-specification.pdf", safe="")
 
     return Response(

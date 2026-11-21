@@ -136,9 +136,34 @@
         .footer {
             margin-top: 24px;
             font-size: 8pt;
+            line-height: 1.5;
             color: #64748b;
             border-top: 1px solid #e2e8f0;
             padding-top: 8px;
+            overflow-wrap: break-word;
+        }
+
+        .company-name {
+            margin: 0 0 6px;
+            font-size: 9pt;
+            font-weight: bold;
+            color: #334155;
+            break-after: avoid;
+        }
+
+        .company-line {
+            margin: 0 0 4px;
+        }
+
+        .company-label {
+            font-weight: bold;
+            color: #475569;
+        }
+
+        .disclaimer {
+            margin: 10px 0 0;
+            font-size: 8pt;
+            color: #64748b;
         }
     </style>
 </head>
@@ -148,7 +173,8 @@
 <div class="header">
     <div class="header-info">
         <div class="brand">
-            ООО «Фазеркрафт» — Техническая спецификация
+            {{ company.short_name if company else "ООО «Фазеркрафт»" }}
+            — Техническая спецификация
         </div>
 
         <h1>{{ product.name }}</h1>
@@ -207,10 +233,97 @@
 </section>
 {% endif %}
 
-<!-- Подвал спецификации -->
+<!-- Реквизиты и подвал спецификации -->
 <div class="footer">
-    Документ сформирован автоматически.
-    Актуальные данные уточняйте в инженерном отделе Faserkraft.
+    {% if company %}
+    <p class="company-name">
+        {{ company.full_name or company.short_name }}
+    </p>
+
+    {% if company.inn or company.kpp or company.ogrn %}
+    <p class="company-line">
+        {% if company.inn %}
+        ИНН {{ company.inn }}
+        {% endif %}
+
+        {% if company.kpp %}
+        {% if company.inn %} · {% endif %}
+        КПП {{ company.kpp }}
+        {% endif %}
+
+        {% if company.ogrn %}
+        {% if company.inn or company.kpp %} · {% endif %}
+        ОГРН {{ company.ogrn }}
+        {% endif %}
+    </p>
+    {% endif %}
+
+    {% if company.legal_address %}
+    <p class="company-line">
+        <span class="company-label">Юридический адрес:</span>
+        {{ company.legal_address }}
+    </p>
+    {% endif %}
+
+    {% if company.actual_address and company.actual_address != company.legal_address %}
+    <p class="company-line">
+        <span class="company-label">Фактический адрес:</span>
+        {{ company.actual_address }}
+    </p>
+    {% endif %}
+
+    {% if company.phone or company.email or company.website %}
+    <p class="company-line">
+        {% if company.phone %}
+        Тел.: {{ company.phone }}
+        {% endif %}
+
+        {% if company.email %}
+        {% if company.phone %} · {% endif %}
+        {{ company.email }}
+        {% endif %}
+
+        {% if company.website %}
+        {% if company.phone or company.email %} · {% endif %}
+        {{ company.website }}
+        {% endif %}
+    </p>
+    {% endif %}
+
+    {% if company.bank_name %}
+    <p class="company-line">
+        <span class="company-label">Банк:</span>
+        {{ company.bank_name }}
+    </p>
+    {% endif %}
+
+    {% if company.bik %}
+    <p class="company-line">
+        <span class="company-label">БИК:</span>
+        {{ company.bik }}
+    </p>
+    {% endif %}
+
+    {% if company.settlement_account %}
+    <p class="company-line">
+        <span class="company-label">Расчётный счёт:</span>
+        {{ company.settlement_account }}
+    </p>
+    {% endif %}
+
+    {% if company.correspondent_account %}
+    <p class="company-line">
+        <span class="company-label">Корреспондентский счёт:</span>
+        {{ company.correspondent_account }}
+    </p>
+    {% endif %}
+    {% endif %}
+
+    <p class="disclaimer">
+        Документ сформирован автоматически.
+        Актуальные данные уточняйте в инженерном отделе
+        {{ company.short_name if company else "Faserkraft" }}.
+    </p>
 </div>
 </body>
 </html>

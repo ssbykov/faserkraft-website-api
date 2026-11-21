@@ -1,0 +1,48 @@
+<div class="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+    <address class="not-italic">
+        {% if address %}
+        <p>
+            <strong>Адрес:</strong>
+            <a
+                    href="{{ maps_url }}"
+                    target="_blank"
+                    rel="noopener noreferrer"
+            >{{ address }}</a>
+        </p>
+        {% endif %}
+
+        {% if phones %}
+        <p>
+            <strong>Телефоны:</strong>
+            {% for phone in phones %}
+            <a href="{{ phone.href }}">{{ phone.text }}</a>{% if not loop.last %}, {% endif %}
+            {% endfor %}
+        </p>
+        {% endif %}
+
+        {% if company.email %}
+        <p>
+            <strong>E-mail:</strong>
+            <a href="mailto:{{ company.email }}">{{ company.email }}</a>
+        </p>
+        {% endif %}
+    </address>
+
+    <p class="mt-6 border-t border-slate-200 pt-5">
+        <strong>Пн — Пт:</strong> с 10:00 до 18:00
+    </p>
+</div>
+
+{% if map_embed_url %}
+<div class="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <iframe
+            title="Яндекс Карты{% if address %}: {{ address }}{% endif %}"
+            src="{{ map_embed_url }}"
+            width="100%"
+            height="400"
+            style="display: block; border: 0;"
+            loading="lazy"
+            allowfullscreen
+    ></iframe>
+</div>
+{% endif %}

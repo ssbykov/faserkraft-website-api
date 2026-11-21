@@ -5,7 +5,7 @@ app/api/v1/__init__.py
 
 from fastapi import APIRouter
 
-from app.api.v1 import categories, leads, pages, products, redirects, menus, homepage
+from app.api.v1 import categories, leads, pages, products, redirects, menus, homepage, company
 
 router = APIRouter()
 
@@ -16,3 +16,4 @@ router.include_router(leads.router)
 router.include_router(redirects.router)
 router.include_router(menus.router)
 router.include_router(homepage.router)
+router.include_router(company.router)

@@ -5,14 +5,15 @@ from sqladmin import Admin
 from app.admin.auth import authentication_backend
 from app.admin.backup import BackupAdmin
 from app.admin.catalog import CATALOG_VIEWS
-from app.admin.leads import LEADS_VIEWS
-from app.admin.menus import MENUS_VIEWS
+from app.admin.company import COMPANY_VIEWS
 from app.admin.homepage import HOMEPAGE_VIEWS
+from app.admin.leads import LEADS_VIEWS
+from app.admin.media_sync import MEDIA_VIEWS
+from app.admin.menus import MENUS_VIEWS
 from app.admin.pages import PAGES_VIEWS
 from app.admin.redirects import REDIRECTS_VIEWS
 from app.admin.users import USERS_VIEWS
 from app.db.session import engine
-from app.admin.media_sync import MEDIA_VIEWS
 
 TEMPLATES_DIR = Path(__file__).resolve().parents[1] / "templates"
 
@@ -35,6 +36,7 @@ def setup_admin(app) -> Admin:
         *MENUS_VIEWS,
         *HOMEPAGE_VIEWS,
         *MEDIA_VIEWS,
+        *COMPANY_VIEWS,
     ]:
         admin.add_view(view)
 

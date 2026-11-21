@@ -12,6 +12,7 @@ from app.models.catalog import (
     SpecificationParameter,
     ProductCardField,
 )
+from app.models.company import CompanyInfo
 from app.models.homepage import HomepageCard, HomepageSection
 from app.models.leads import LeadRequest
 from app.models.media import MediaAsset, ContentImage
@@ -42,4 +43,5 @@ __all__ = [
     "HomepageCard",
     "HomepageSection",
     "YandexToken",
+    "CompanyInfo",
 ]

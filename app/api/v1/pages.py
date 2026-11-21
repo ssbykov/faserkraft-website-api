@@ -17,6 +17,7 @@ from app.schemas.pages import (
     PageOut,
     PageTreeItem,
 )
+from app.services.company_shortcodes import expand_company_shortcodes
 from app.services.shortcodes import db_asset_loader, expand_media_shortcodes
 
 router = APIRouter(prefix="/pages", tags=["pages"])
@@ -165,7 +166,19 @@ async def get_page(slug: str, db: AsyncSession = Depends(get_db)):
     ]
 
     page_out = PageOut.model_validate(page_obj)
-    content = await expand_media_shortcodes(page_out.content, db_asset_loader(db))
+
+    # Изображения из медиабиблиотеки: {{media:12}}
+    content = await expand_media_shortcodes(
+        page_out.content,
+        db_asset_loader(db),
+    )
+
+    # Контакты компании из company_info: {{company:contacts}}
+    content = await expand_company_shortcodes(
+        content,
+        db,
+    )
+
     return page_out.model_copy(
         update={
             "content": content,

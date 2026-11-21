@@ -6,6 +6,7 @@ from urllib.parse import unquote, urlsplit
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from weasyprint import HTML
 
+from app.schemas.company import CompanyOut
 from app.schemas.schemas import ProductOut
 
 logger = logging.getLogger(__name__)
@@ -55,7 +56,9 @@ def media_file_uri(image_url: str | None) -> str | None:
     return file_path.as_uri()
 
 
-def render_product_spec_pdf(product: ProductOut) -> bytes:
+def render_product_spec_pdf(
+    product: ProductOut, company: CompanyOut | None = None
+) -> bytes:
     sorted_specs = sorted(
         product.specifications or [],
         key=lambda spec: spec.sort_order,
@@ -91,6 +94,7 @@ def render_product_spec_pdf(product: ProductOut) -> bytes:
         product=product,
         grouped_specs=grouped,
         drawings=drawings,
+        company=company,
     )
 
     return HTML(
