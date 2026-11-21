@@ -5,6 +5,7 @@ app/api/v1/products.py
 
 import re
 from typing import Optional
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import Response
@@ -294,12 +295,14 @@ async def get_product_spec_pdf(slug: str, db: AsyncSession = Depends(get_db)):
 
     product_out = ProductOut.model_validate(product)
     pdf_bytes = render_product_spec_pdf(product_out)
-    filename = f"{slug}-specification.pdf"
+    filename = quote(f"{slug}-specification.pdf", safe="")
 
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
         headers={
-            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Content-Disposition": (
+                f"inline; filename*=UTF-8''{filename}"
+            ),
         },
     )
