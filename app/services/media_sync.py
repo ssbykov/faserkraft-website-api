@@ -7,18 +7,32 @@ app/services/media_sync.py
 """
 
 import asyncio
+import hashlib
 import logging
 import re
 import time
 from pathlib import Path
 
 from app.core.config import settings
-from app.services.media import IMAGES_SUBDIR, MEDIA_DIR, MediaValidationError, prepare_image
+from app.services.media import (
+    DOCUMENTS_SUBDIR,
+    IMAGES_SUBDIR,
+    MAX_PDF_BYTES,
+    MEDIA_DIR,
+    MediaValidationError,
+    prepare_image,
+)
 from app.services.yandex_disk import YaDisk
 
 IMAGES_DIR = MEDIA_DIR / IMAGES_SUBDIR
 FILE_RE = re.compile(
     r"^(?!\.)[A-Za-z0-9_.-]+\.(?:jpg|jpeg|png|webp|svg)$", re.IGNORECASE
+)
+DOCUMENTS_DIR = MEDIA_DIR / DOCUMENTS_SUBDIR
+
+PDF_FILE_RE = re.compile(
+    r"^(?!\.)[A-Za-z0-9_.-]+\.pdf$",
+    re.IGNORECASE,
 )
 DIRECTIONS = ("push", "pull", "both")
 CONCURRENCY = 4
@@ -36,28 +50,57 @@ sync_state: dict = {
     "finished_at": None,
 }
 
+def _scopes():
+    folder = settings.YANDEX_DISK_MEDIA_FOLDER.rstrip("/")
+
+    return [
+        (
+            "images",
+            IMAGES_DIR,
+            YaDisk(folder),
+            FILE_RE,
+        ),
+        (
+            "documents",
+            DOCUMENTS_DIR,
+            YaDisk(f"{folder}/documents"),
+            PDF_FILE_RE,
+        ),
+    ]
 
 def _disk() -> YaDisk:
     return YaDisk(settings.YANDEX_DISK_MEDIA_FOLDER)
 
 
-def _local_files() -> dict[str, int]:
-    if not IMAGES_DIR.exists():
+def _local_files(directory: Path, pattern: re.Pattern) -> dict[str, int]:
+    if not directory.exists():
         return {}
+
     return {
-        p.name: p.stat().st_size
-        for p in IMAGES_DIR.iterdir()
-        if p.is_file() and FILE_RE.fullmatch(p.name)
+        path.name: path.stat().st_size
+        for path in directory.iterdir()
+        if path.is_file() and pattern.fullmatch(path.name)
     }
 
 
-async def build_plan() -> dict:
-    remote_all = await _disk().list_files()
-    remote = {n: s for n, s in remote_all.items() if FILE_RE.fullmatch(n)}
-    local = await asyncio.to_thread(_local_files)
+async def _build_scope_plan(
+    directory: Path,
+    disk: YaDisk,
+    pattern: re.Pattern,
+) -> dict:
+    remote_all = await disk.list_files()
+
+    remote = {
+        name: size
+        for name, size in remote_all.items()
+        if pattern.fullmatch(name)
+    }
+
+    local = await asyncio.to_thread(_local_files, directory, pattern)
 
     common = local.keys() & remote.keys()
-    conflicts = sorted(n for n in common if local[n] != remote[n])
+    conflicts = sorted(name for name in common if local[name] != remote[name])
+
     return {
         "local_total": len(local),
         "remote_total": len(remote),
@@ -67,6 +110,30 @@ async def build_plan() -> dict:
         "same": len(common) - len(conflicts),
     }
 
+
+async def build_plan() -> dict:
+    result = {
+        "local_total": 0,
+        "remote_total": 0,
+        "to_upload": [],
+        "to_download": [],
+        "conflicts": [],
+        "same": 0,
+    }
+
+    for label, directory, disk, pattern in _scopes():
+        plan = await _build_scope_plan(directory, disk, pattern)
+
+        for key in ("local_total", "remote_total", "same"):
+            result[key] += plan[key]
+
+        for key in ("to_upload", "to_download", "conflicts"):
+            result[key].extend(
+                f"{label}/{name}"
+                for name in plan[key]
+            )
+
+    return result
 
 async def _run_many(names: list[str], action, base: int, span: int) -> list[str]:
     """Выполняет action(name) параллельно; возвращает список ошибок."""
@@ -91,58 +158,137 @@ async def _run_many(names: list[str], action, base: int, span: int) -> list[str]
     return errors
 
 
-async def _download_one(disk: YaDisk, name: str) -> None:
-    part = IMAGES_DIR / f"{name}.part"
-    final = IMAGES_DIR / name
+async def _download_one(
+    disk: YaDisk,
+    name: str,
+    directory: Path,
+    is_pdf: bool,
+) -> None:
+    part = directory / f"{name}.part"
+    final = directory / name
+
+    def validate_and_publish() -> None:
+        if is_pdf and part.stat().st_size > MAX_PDF_BYTES:
+            raise RuntimeError("PDF превышает допустимый размер 20 МБ.")
+
+        content = part.read_bytes()
+
+        if is_pdf:
+            if not content.startswith(b"%PDF-"):
+                raise RuntimeError("Файл не является PDF.")
+
+            stem = Path(name).stem
+
+            if re.fullmatch(r"[0-9a-fA-F]{64}", stem):
+                digest = hashlib.sha256(content).hexdigest()
+
+                if digest != stem.lower():
+                    raise RuntimeError(
+                        "SHA-256 содержимого не совпадает с именем PDF."
+                    )
+        else:
+            try:
+                _, safe_content = prepare_image(content)
+            except MediaValidationError as exc:
+                raise RuntimeError(
+                    f"Файл не прошёл проверку: {exc}"
+                ) from exc
+
+            part.write_bytes(safe_content)
+
+        part.replace(final)
+
     try:
         await disk.download_file(name, part)
-        content = await asyncio.to_thread(part.read_bytes)
-        try:
-            _, safe_content = prepare_image(content)
-        except MediaValidationError as exc:
-            raise RuntimeError(f"файл не прошёл проверку: {exc}") from exc
-        await asyncio.to_thread(final.write_bytes, safe_content)
+        await asyncio.to_thread(validate_and_publish)
     finally:
-        part.unlink(missing_ok=True)
+        await asyncio.to_thread(part.unlink, missing_ok=True)
 
 
 async def _sync(direction: str) -> str:
     async with _lock:
-        disk = _disk()
-        IMAGES_DIR.mkdir(parents=True, exist_ok=True)
-
-        sync_state.update(stage="Сравнение файлов", percent=5)
-        plan = await build_plan()
         errors: list[str] = []
-        uploaded = downloaded = 0
+        uploaded = 0
+        downloaded = 0
+        conflicts = 0
 
-        if direction in ("push", "both") and plan["to_upload"]:
-            sync_state.update(stage="Выгрузка на Яндекс Диск")
-            await disk.ensure_folder()
-            errors += await _run_many(
-                plan["to_upload"],
-                lambda n: disk.upload_file(IMAGES_DIR / n),
-                base=10,
-                span=40,
-            )
-            uploaded = len(plan["to_upload"])
+        scopes = _scopes()
+        scope_span = 100 // len(scopes)
 
-        if direction in ("pull", "both") and plan["to_download"]:
-            sync_state.update(stage="Загрузка с Яндекс Диска")
-            errors += await _run_many(
-                plan["to_download"],
-                lambda n: _download_one(disk, n),
-                base=50,
-                span=48,
+        for index, (label, directory, disk, pattern) in enumerate(scopes):
+            await asyncio.to_thread(
+                directory.mkdir,
+                parents=True,
+                exist_ok=True,
             )
-            downloaded = len(plan["to_download"])
+
+            base = index * scope_span
+
+            sync_state.update(
+                stage=f"{label}: сравнение файлов",
+                percent=base,
+            )
+
+            plan = await _build_scope_plan(directory, disk, pattern)
+            conflicts += len(plan["conflicts"])
+
+            if direction in ("push", "both") and plan["to_upload"]:
+                sync_state.update(
+                    stage=f"{label}: выгрузка на Яндекс Диск"
+                )
+
+                await disk.ensure_folder()
+
+                upload_errors = await _run_many(
+                    plan["to_upload"],
+                    lambda name: disk.upload_file(directory / name),
+                    base=base + 5,
+                    span=20,
+                )
+
+                uploaded += len(plan["to_upload"]) - len(upload_errors)
+
+                errors.extend(
+                    f"{label}/{error}"
+                    for error in upload_errors
+                )
+
+            if direction in ("pull", "both") and plan["to_download"]:
+                sync_state.update(
+                    stage=f"{label}: загрузка с Яндекс Диска"
+                )
+
+                download_errors = await _run_many(
+                    plan["to_download"],
+                    lambda name: _download_one(
+                        disk,
+                        name,
+                        directory,
+                        is_pdf=(label == "documents"),
+                    ),
+                    base=base + 25,
+                    span=24,
+                )
+
+                downloaded += len(plan["to_download"]) - len(download_errors)
+
+                errors.extend(
+                    f"{label}/{error}"
+                    for error in download_errors
+                )
 
         message = (
-            f"Выгружено файлов: {uploaded}, загружено: {downloaded}, "
-            f"конфликтов (пропущено): {len(plan['conflicts'])}."
+            f"Выгружено файлов: {uploaded}, "
+            f"загружено: {downloaded}, "
+            f"конфликтов (пропущено): {conflicts}."
         )
+
         if errors:
-            raise RuntimeError(message + f" Ошибок: {len(errors)}. Первая: {errors[0]}")
+            raise RuntimeError(
+                message
+                + f" Ошибок: {len(errors)}. Первая: {errors[0]}"
+            )
+
         return message
 
 
