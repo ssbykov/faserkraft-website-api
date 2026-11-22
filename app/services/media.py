@@ -6,7 +6,10 @@ app/services/media.py
 путь вида /media/images/<uuid>.<ext>. Имя файла от пользователя не используется.
 """
 
+import hashlib
+import os
 import re
+import tempfile
 import uuid
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -252,3 +255,58 @@ def delete_image_file(image_url: str | None) -> None:
     if path.parent != base:
         return
     path.unlink(missing_ok=True)
+
+
+DOCUMENTS_SUBDIR = "documents"
+DOCUMENTS_URL_PREFIX = f"/media/{DOCUMENTS_SUBDIR}/"
+MAX_PDF_BYTES = 20 * 1024 * 1024
+
+
+async def save_pdf(upload: Any) -> str:
+    """Сохраняет PDF под именем SHA-256, не создавая повторных копий."""
+    content = await upload.read(MAX_PDF_BYTES + 1)
+
+    if not content:
+        raise MediaValidationError("Файл пустой.")
+
+    if len(content) > MAX_PDF_BYTES:
+        raise MediaValidationError("PDF слишком большой (максимум 20 МБ).")
+
+    if not content.startswith(b"%PDF-"):
+        raise MediaValidationError("Загрузите файл в формате PDF.")
+
+    def store() -> str:
+        digest = hashlib.sha256(content).hexdigest()
+        name = f"{digest}.pdf"
+
+        target_dir = MEDIA_DIR / DOCUMENTS_SUBDIR
+        target_dir.mkdir(parents=True, exist_ok=True)
+
+        target = target_dir / name
+
+        if target.is_file():
+            return f"{DOCUMENTS_URL_PREFIX}{name}"
+
+        # Сначала полностью записываем временный файл.
+        # Готовый PDF появляется по конечному адресу только после записи.
+        temporary_path: Path | None = None
+
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="wb",
+                dir=target_dir,
+                prefix=".upload-",
+                suffix=".tmp",
+                delete=False,
+            ) as temporary:
+                temporary_path = Path(temporary.name)
+                temporary.write(content)
+
+            os.replace(temporary_path, target)
+        finally:
+            if temporary_path is not None:
+                temporary_path.unlink(missing_ok=True)
+
+        return f"{DOCUMENTS_URL_PREFIX}{name}"
+
+    return await anyio.to_thread.run_sync(store)

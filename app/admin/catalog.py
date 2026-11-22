@@ -9,6 +9,7 @@ from sqladmin.fields import FileField
 from sqladmin.filters import BooleanFilter, ForeignKeyFilter
 from sqlalchemy import func, select
 from wtforms import SelectField
+from wtforms.validators import Optional as OptionalValidator
 
 from app.models import (
     ContentImage,
@@ -26,6 +27,7 @@ from app.services.media import (
     MediaValidationError,
     delete_image_file,
     save_image,
+    save_pdf,
 )
 
 
@@ -385,6 +387,7 @@ class ProductDocumentAdmin(ModelView, model=ProductDocument):
     name = "Документ"
     name_plural = "Документы"
     icon = "fa-solid fa-file-lines"
+
     column_list = [
         ProductDocument.id,
         ProductDocument.product,
@@ -393,6 +396,15 @@ class ProductDocumentAdmin(ModelView, model=ProductDocument):
         ProductDocument.file_url,
         ProductDocument.sort_order,
     ]
+
+    column_labels = {
+        ProductDocument.product: "Товар",
+        ProductDocument.document_type: "Тип документа",
+        ProductDocument.title: "Название",
+        ProductDocument.file_url: "Ссылка на файл",
+        ProductDocument.sort_order: "Порядок",
+    }
+
     form_columns = [
         ProductDocument.product,
         ProductDocument.document_type,
@@ -400,6 +412,84 @@ class ProductDocumentAdmin(ModelView, model=ProductDocument):
         ProductDocument.file_url,
         ProductDocument.sort_order,
     ]
+
+    form_args = {
+        "document_type": {
+            "label": "Тип документа",
+            "choices": [
+                ("", "Не указан"),
+                ("operating_manual", "Руководство по эксплуатации"),
+                ("passport", "Паспорт изделия"),
+                ("certificate", "Сертификат"),
+                ("other", "Другой документ"),
+            ],
+            "description": (
+                "Руководство по эксплуатации показывается отдельной "
+                "кнопкой в верхней части страницы товара."
+            ),
+        },
+        "title": {
+            "label": "Название",
+            "description": (
+                "Произвольное название документа. "
+                "Можно указать модель изделия и редакцию."
+            ),
+        },
+        "file_url": {
+            "label": "Ссылка на файл",
+            "description": (
+                "Оставьте пустым, если загружаете PDF ниже. "
+                "После загрузки ссылка заполнится автоматически."
+            ),
+            "validators": [OptionalValidator()],
+            "render_kw": {"required": False},
+        },
+    }
+
+    form_ajax_refs = {
+        "product": {
+            "fields": ("name", "slug"),
+            "order_by": "name",
+        },
+    }
+
+    form_overrides = {
+        "document_type": SelectField,
+    }
+
+    async def scaffold_form(self, rules=None):
+        form_class = await super().scaffold_form(rules)
+
+        form_class.file = FileField(
+            "Загрузить PDF",
+            description=(
+                "PDF до 20 МБ. При редактировании оставьте поле пустым, "
+                "чтобы сохранить текущую ссылку. "
+                "Загруженный файл имеет приоритет над введённой ссылкой."
+            ),
+        )
+
+        return form_class
+
+    async def on_model_change(self, data, model, is_created, request):
+        upload = data.pop("file", None)
+        filename = getattr(upload, "filename", None)
+
+        if filename:
+            # Новый файл выбран — загружаем и заменяем ссылку.
+            try:
+                data["file_url"] = await save_pdf(upload)
+            except MediaValidationError as exc:
+                raise ValueError(str(exc)) from exc
+        else:
+            # Без нового файла используем введённую или существующую ссылку.
+            entered_url = (data.get("file_url") or "").strip()
+            existing_url = (model.file_url or "").strip() if not is_created else ""
+
+            data["file_url"] = entered_url or existing_url
+
+        if not data["file_url"]:
+            raise ValueError("Загрузите PDF или укажите ссылку на документ.")
 
 
 class ProductCardFieldAdmin(ModelView, model=ProductCardField):

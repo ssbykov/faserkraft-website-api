@@ -4,15 +4,13 @@ app/models/pages.py
 """
 
 from datetime import datetime
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import ForeignKey, Text, Boolean, Integer, String, DateTime, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import expression
 
 from app.db.session import Base
-
-from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
     from app.models.media import ContentImage
@@ -102,7 +100,6 @@ class Page(Base):
         return self.title
 
 
-
 class PageDocument(Base):
     __tablename__ = "page_documents"
 
@@ -123,3 +120,4 @@ class PageDocument(Base):
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
 
     page: Mapped["Page"] = relationship(back_populates="documents")
+

@@ -220,8 +220,6 @@ class ProductSpecification(Base):
         return self.parameter_name
 
 
-
-
 class ProductDocument(Base):
     __tablename__ = "product_documents"
 
@@ -238,3 +236,8 @@ class ProductDocument(Base):
 
     def __repr__(self) -> str:
         return self.document_type or "Документа нет"
+
+    @property
+    def file(self) -> None:
+        """Поле загрузки формы; существующий документ хранится в file_url."""
+        return None
