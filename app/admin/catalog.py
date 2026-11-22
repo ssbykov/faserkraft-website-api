@@ -3,6 +3,7 @@ app/admin/catalog.py
 Регистрация моделей каталога товаров в SQLAdmin
 """
 
+import anyio
 from markupsafe import Markup, escape
 from sqladmin import ModelView
 from sqladmin.fields import FileField
@@ -28,6 +29,9 @@ from app.services.media import (
     delete_image_file,
     save_image,
     save_pdf,
+)
+from app.services.specification_values import (
+    validate_specification_value,
 )
 
 
@@ -133,17 +137,35 @@ class SpecificationParameterAdmin(ModelView, model=SpecificationParameter):
     ]
 
 
-class ProductSpecificationAdmin(ModelView, model=ProductSpecification):
+class ProductSpecificationAdmin(
+    ModelView,
+    model=ProductSpecification,
+):
     name = "Характеристика"
     name_plural = "Характеристики"
     icon = "fa-solid fa-list-check"
+
     column_list = [
         ProductSpecification.id,
         ProductSpecification.product,
         ProductSpecification.parameter,
+        ProductSpecification.value_type,
+        ProductSpecification.value,
+        ProductSpecification.asset,
+    ]
+
+    column_labels = {
+        ProductSpecification.product: "Товар",
+        ProductSpecification.parameter: "Параметр",
+        ProductSpecification.value_type: "Тип значения",
+        ProductSpecification.value: "Значение / подпись",
+        ProductSpecification.asset: "Изображение",
+    }
+
+    column_searchable_list = [
         ProductSpecification.value,
     ]
-    column_searchable_list = [ProductSpecification.value]
+
     column_filters = [
         ForeignKeyFilter(
             ProductSpecification.product_id,
@@ -156,15 +178,112 @@ class ProductSpecificationAdmin(ModelView, model=ProductSpecification):
             title="Параметр",
         ),
     ]
+
     form_columns = [
         ProductSpecification.product,
         ProductSpecification.parameter,
+        ProductSpecification.value_type,
         ProductSpecification.value,
+        ProductSpecification.asset,
     ]
-    form_ajax_refs = {
-        "product": {"fields": ("name", "slug"), "order_by": "name"},
-        "parameter": {"fields": ("name",), "order_by": "name"},
+
+    form_overrides = {
+        "value_type": SelectField,
     }
+
+    form_args = {
+        "value_type": {
+            "label": "Тип значения",
+            "choices": [
+                ("text", "Текст"),
+                ("image", "Изображение"),
+            ],
+            "default": "text",
+        },
+        "value": {
+            "label": "Значение / подпись ссылки",
+            "description": (
+                "Для текста — значение характеристики. "
+                "Для изображения — подпись ссылки, "
+                "например «Типоразмер 2». Markdown не нужен."
+            ),
+        },
+        "asset": {
+            "label": "Изображение",
+            "description": (
+                "Заполняйте только для типа «Изображение». "
+                "Файл предварительно загрузите в «Медиафайлы». "
+                "Для типа «Текст» очистите выбор."
+            ),
+        },
+    }
+
+    form_ajax_refs = {
+        "product": {
+            "fields": ("name", "slug"),
+            "order_by": "name",
+        },
+        "parameter": {
+            "fields": ("name",),
+            "order_by": "name",
+        },
+        "asset": {
+            "fields": ("title", "alt_text", "file_url"),
+            "order_by": "id",
+        },
+    }
+
+    async def on_model_change(
+        self,
+        data,
+        model,
+        is_created,
+        request,
+    ):
+        raw_asset = data.get("asset")
+
+        asset_id = None
+        image_url = None
+
+        # В AJAX-поле SQLAdmin может передать ID строкой.
+        # Также допускаем объект модели, если он уже преобразован.
+        if raw_asset is not None:
+            raw_id = getattr(raw_asset, "id", raw_asset)
+
+            if isinstance(raw_id, str):
+                raw_id = raw_id.strip()
+
+            if raw_id not in (None, "", "__None", "None"):
+                try:
+                    asset_id = int(raw_id)
+                except (TypeError, ValueError) as exc:
+                    raise ValueError(
+                        "Некорректный идентификатор изображения. "
+                        "Выберите файл из медиатеки повторно."
+                    ) from exc
+
+                if asset_id <= 0:
+                    raise ValueError("Некорректный идентификатор изображения.")
+
+        if asset_id is not None:
+            async with self.session_maker() as session:
+                image_url = await session.scalar(
+                    select(MediaAsset.file_url).where(MediaAsset.id == asset_id)
+                )
+
+            if image_url is None:
+                raise ValueError(
+                    "Выбранное изображение не найдено в медиатеке. "
+                    "Выберите другой файл."
+                )
+
+        data["value"] = await anyio.to_thread.run_sync(
+            validate_specification_value,
+            data.get("value_type"),
+            data.get("value"),
+            asset_id,
+            image_url,
+        )
 
 
 CONTENT_IMAGE_KIND_CHOICES = [
@@ -279,20 +398,32 @@ class MediaAssetAdmin(ModelView, model=MediaAsset):
         request.state.old_media_file_url = None
 
     async def on_model_delete(self, model, request):
-        # Файл, который используется товарами или страницами, удалять нельзя
         async with self.session_maker() as session:
-            used = await session.scalar(
+            used_images = await session.scalar(
                 select(func.count())
                 .select_from(ContentImage)
                 .where(ContentImage.asset_id == model.id)
             )
-        if used:
-            raise ValueError(
-                f"Файл используется в товарах и страницах ({used}). "
-                "Сначала удалите привязки в разделе «Изображения»."
+
+            used_specs = await session.scalar(
+                select(func.count())
+                .select_from(ProductSpecification)
+                .where(ProductSpecification.asset_id == model.id)
             )
 
-        pending = getattr(request.state, "media_files_to_delete", [])
+        if used_images or used_specs:
+            raise ValueError(
+                "Файл используется: "
+                f"в изображениях — {used_images}, "
+                f"в характеристиках — {used_specs}. "
+                "Сначала удалите соответствующие привязки."
+            )
+
+        pending = getattr(
+            request.state,
+            "media_files_to_delete",
+            [],
+        )
         pending.append(model.file_url)
         request.state.media_files_to_delete = pending
 

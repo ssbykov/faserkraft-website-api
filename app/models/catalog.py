@@ -4,7 +4,7 @@ app/models/catalog.py
 """
 
 from datetime import datetime
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 from sqlalchemy import (
     ForeignKey,
@@ -15,12 +15,15 @@ from sqlalchemy import (
     DateTime,
     func,
     UniqueConstraint,
+    CheckConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import expression
 
 from app.db.session import Base
 
+if TYPE_CHECKING:
+    from app.models.media import MediaAsset
 
 class ProductCategory(Base):
     __tablename__ = "product_categories"
@@ -174,32 +177,71 @@ class ProductCardField(Base):
 
 class ProductSpecification(Base):
     __tablename__ = "product_specifications"
+
     __table_args__ = (
         UniqueConstraint(
             "product_id",
             "parameter_id",
             name="uq_product_specifications_product_parameter",
         ),
+        CheckConstraint(
+            "value_type IN ('text', 'image')",
+            name="ck_product_specifications_value_type",
+        ),
+        CheckConstraint(
+            "(value_type = 'text' AND asset_id IS NULL) OR "
+            "(value_type = 'image' AND asset_id IS NOT NULL "
+            "AND value IS NOT NULL AND length(trim(value)) > 0)",
+            name="ck_product_specifications_value_shape",
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
+
     product_id: Mapped[int] = mapped_column(
-        ForeignKey("products.id", ondelete="CASCADE"), nullable=False
+        ForeignKey("products.id", ondelete="CASCADE"),
+        nullable=False,
     )
+
     parameter_id: Mapped[int] = mapped_column(
         ForeignKey("specification_parameters.id", ondelete="RESTRICT"),
         nullable=False,
         index=True,
     )
-    value: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 
-    product: Mapped["Product"] = relationship(back_populates="specifications")
+    value: Mapped[Optional[str]] = mapped_column(
+        String(500),
+        nullable=True,
+    )
+
+    value_type: Mapped[str] = mapped_column(
+        String(20),
+        default="text",
+        server_default="text",
+        nullable=False,
+    )
+
+    asset_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("media_assets.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
+
+    product: Mapped["Product"] = relationship(
+        back_populates="specifications",
+    )
+
     parameter: Mapped["SpecificationParameter"] = relationship(
         lazy="joined",
         innerjoin=True,
     )
 
-    # Плоский вид для текущего API и фронтенда
+    asset: Mapped[Optional["MediaAsset"]] = relationship(
+        lazy="joined",
+    )
+
+    # Плоский вид для API и frontend.
+
     @property
     def group_name(self) -> str:
         return self.parameter.group.name
@@ -211,6 +253,13 @@ class ProductSpecification(Base):
     @property
     def parameter_value(self) -> Optional[str]:
         return self.value
+
+    @property
+    def image_url(self) -> Optional[str]:
+        if self.value_type != "image" or self.asset is None:
+            return None
+
+        return self.asset.file_url
 
     @property
     def sort_order(self) -> int:

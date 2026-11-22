@@ -4,7 +4,7 @@ Pydantic v2 схемы каталога продукции.
 """
 
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -30,6 +30,11 @@ class ProductSpecificationBase(BaseModel):
     group_name: str
     parameter_name: str
     parameter_value: Optional[str] = None
+
+    value_type: Literal["text", "image"] = "text"
+    asset_id: Optional[int] = None
+    image_url: Optional[str] = None
+
     sort_order: int = 0
 
 
