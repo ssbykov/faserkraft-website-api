@@ -4,10 +4,36 @@ app/admin/menus.py
 """
 
 from sqladmin import ModelView
-from sqladmin.filters import BooleanFilter, ForeignKeyFilter
+from sqladmin.filters import BooleanFilter
+from sqlalchemy import select
+from sqlalchemy.orm import aliased
 
 from app.models import Menu, MenuItem
 
+
+class ParentMenuItemFilter:
+    title = "Родитель"
+    parameter_name = "parent_id"
+    has_operator = False
+    template = "sqladmin/filters/lookup_filter.html"
+
+    async def lookups(self, request, model, run_query):
+        child = aliased(MenuItem)
+        stmt = (
+            select(MenuItem.id, MenuItem.label, Menu.code)
+            .join(Menu, Menu.id == MenuItem.menu_id)
+            .where(MenuItem.id.in_(
+                select(child.parent_id).where(child.parent_id.is_not(None))
+            ))
+            .order_by(Menu.code, MenuItem.sort_order)
+        )
+        rows = await run_query(stmt)
+        return [("", "Все")] + [(str(r.id), f"{r.code} / {r.label}") for r in rows]
+
+    async def get_filtered_query(self, query, value, model):
+        if not value:
+            return query
+        return query.filter(MenuItem.parent_id == int(value))
 
 class MenuAdmin(ModelView, model=Menu):
     name = "Меню"
@@ -73,7 +99,7 @@ class MenuItemAdmin(ModelView, model=MenuItem):
         MenuItem.target_blank,
     ]
     column_filters = [
-        ForeignKeyFilter(MenuItem.menu_id, Menu.name, title="Меню"),
+        ParentMenuItemFilter(),
         BooleanFilter(MenuItem.is_visible),
         BooleanFilter(MenuItem.target_blank),
     ]
