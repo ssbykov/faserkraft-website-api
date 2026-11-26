@@ -6,7 +6,17 @@ app/models/pages.py
 from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import ForeignKey, Text, Boolean, Integer, String, DateTime, func
+from sqlalchemy import (
+    CheckConstraint,
+    ForeignKey,
+    Text,
+    Boolean,
+    Integer,
+    String,
+    DateTime,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import expression
 
@@ -96,6 +106,13 @@ class Page(Base):
         order_by="PageDocument.sort_order",
     )
 
+    related_links: Mapped[list["PageRelatedLink"]] = relationship(
+        back_populates="page",
+        foreign_keys="PageRelatedLink.page_id",
+        cascade="all, delete-orphan",
+        order_by="PageRelatedLink.sort_order, PageRelatedLink.id",
+    )
+
     def __repr__(self) -> str:
         return self.title
 
@@ -121,3 +138,35 @@ class PageDocument(Base):
 
     page: Mapped["Page"] = relationship(back_populates="documents")
 
+
+class PageRelatedLink(Base):
+    """Связанный раздел: карточка «Читайте также» внизу страницы."""
+
+    __tablename__ = "page_related_links"
+    __table_args__ = (
+        UniqueConstraint(
+            "page_id", "related_page_id", name="uq_page_related_links_pair"
+        ),
+        CheckConstraint(
+            "page_id <> related_page_id", name="ck_page_related_links_not_self"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    page_id: Mapped[int] = mapped_column(
+        ForeignKey("pages.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    related_page_id: Mapped[int] = mapped_column(
+        ForeignKey("pages.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    label: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    card_title: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    page: Mapped["Page"] = relationship(
+        back_populates="related_links", foreign_keys=[page_id]
+    )
+    related_page: Mapped["Page"] = relationship(foreign_keys=[related_page_id])
+
+    def __repr__(self) -> str:
+        return f"{self.page_id} → {self.related_page_id}"

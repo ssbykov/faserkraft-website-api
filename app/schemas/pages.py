@@ -107,6 +107,13 @@ class PageParentOut(BaseModel):
     title: str
 
 
+class PageRelatedOut(BaseModel):
+    slug: str
+    title: str
+    label: Optional[str] = None
+    page_type: PageTypeOut
+
+
 class PageOut(PageBase):
     model_config = ConfigDict(from_attributes=True)
 
@@ -119,6 +126,7 @@ class PageOut(PageBase):
     page_type: PageTypeDetailOut
     images: list[PageImageOut] = Field(default_factory=list)
     documents: list[PageDocumentOut] = Field(default_factory=list)
+    related_pages: list[PageRelatedOut] = Field(default_factory=list)
     children: list[PageListItem] = Field(default_factory=list)
 
 

@@ -11,10 +11,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.db.session import get_db
-from app.models import Page, PageType, MenuItem, Menu
+from app.models import Page, PageType, MenuItem, Menu, PageRelatedLink
 from app.schemas.pages import (
     PageListItem,
     PageOut,
+    PageRelatedOut,
     PageTreeItem,
 )
 from app.services.company_shortcodes import expand_company_shortcodes
@@ -130,6 +131,9 @@ async def get_page(slug: str, db: AsyncSession = Depends(get_db)):
             selectinload(Page.images),
             selectinload(Page.children).selectinload(Page.page_type),
             selectinload(Page.documents),
+            selectinload(Page.related_links)
+            .selectinload(PageRelatedLink.related_page)
+            .selectinload(Page.page_type),
         )
         .where(
             Page.slug == slug,
@@ -179,10 +183,22 @@ async def get_page(slug: str, db: AsyncSession = Depends(get_db)):
         db,
     )
 
+    related_pages = [
+        PageRelatedOut(
+            slug=link.related_page.slug,
+            title=(link.card_title or "").strip() or link.related_page.title,
+            label=(link.label or "").strip() or None,
+            page_type=link.related_page.page_type,
+        )
+        for link in page_obj.related_links
+        if link.related_page.is_published
+    ]
+
     return page_out.model_copy(
         update={
             "content": content,
             "menu_parent_labels": menu_parent_labels,
             "children": [child for child in page_out.children if child.is_published],
+            "related_pages": related_pages,
         }
     )
